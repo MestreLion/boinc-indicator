@@ -132,11 +132,37 @@ class BoincIndicator(object):
 
 
     def main(self):
-        return Gtk.main()
+        #FIXME: make damn sure Indicator have found icons and it's working
+        #       before entering Gtk.main()! An invisible indicator has no means
+        #       to exit app, and KeyboardInterrupt does not work with Gtk.main()
+        #       See: https://bugzilla.gnome.org/show_bug.cgi?id=622084
+        Gtk.main()
+
+
+    def quit(self):
+        Gtk.main_quit()
 
 
     def handler_generic(self, src):
         print '"%s" was clicked' % src.get_label()
+
+
+    def handler_website(self, src):
+        webbrowser.open('http://boinc.berkeley.edu')
+
+
+    def handler_suspend_resume(self, src):
+        #TODO: This is mock-up. When API is ready, GUI should do nothing but:
+        #      boinc.set_run_mode(NEVER); self.update_status()
+        self.suspended = not self.suspended
+        self.update_status(force=True)
+
+
+    def handler_suspend_resume_gpu(self, src):
+        #TODO: This is mock-up. When API is ready, GUI should do nothing but:
+        #      boinc.set_gpu_mode(NEVER); self.update_status()
+        self.gpu_suspended = not self.gpu_suspended
+        self.update_status(force=True)
 
 
     def handler_about(self, src):
@@ -157,26 +183,8 @@ class BoincIndicator(object):
         self.about.destroy()
 
 
-    def handler_website(self, src):
-        webbrowser.open('http://boinc.berkeley.edu')
-
-
     def handler_quit(self, src):
-        Gtk.main_quit()
-
-
-    def handler_suspend_resume(self, src):
-        #TODO: This is mock-up. When API is ready, GUI should do nothing but:
-        #      boinc.set_run_mode(NEVER); self.update_status()
-        self.suspended = not self.suspended
-        self.update_status(force=True)
-
-
-    def handler_suspend_resume_gpu(self, src):
-        #TODO: This is mock-up. When API is ready, GUI should do nothing but:
-        #      boinc.set_gpu_mode(NEVER); self.update_status()
-        self.gpu_suspended = not self.gpu_suspended
-        self.update_status(force=True)
+        self.quit()
 
 
     def update_status(self, force=False):
