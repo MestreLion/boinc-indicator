@@ -21,7 +21,7 @@
 # Based on clientgui/BOINCTaskBar.{h,cpp}
 
 import sys
-import os.path
+import os.path as osp
 import webbrowser
 
 from gi.repository import Gtk, GLib, AppIndicator3
@@ -50,8 +50,10 @@ __updated__ = '2013-05-08'
 
 class BoincIndicator(object):
     def __init__(self, theme_path="", refresh=1):
-        self.theme_path = theme_path
+        self.theme_path = osp.abspath(theme_path or
+                                      osp.join(osp.dirname(__file__),"images"))
         self._refresh = refresh
+        self._timerid = 0
 
         self.icon           = __apptag__
         self.icon_normal    = __apptag__ + '-normal'
@@ -110,8 +112,6 @@ class BoincIndicator(object):
         gtkmenu.show_all()
         self.update_status()
         self.ind.set_menu(gtkmenu)
-        self._timerid = GLib.timeout_add_seconds(self.refresh,
-                                                 self.update_status)
 
     # TODO:
     # refresh rate control is premature over-engineering that will likely
@@ -136,6 +136,8 @@ class BoincIndicator(object):
         #       before entering Gtk.main()! An invisible indicator has no means
         #       to exit app, and KeyboardInterrupt does not work with Gtk.main()
         #       See: https://bugzilla.gnome.org/show_bug.cgi?id=622084
+        self._timerid = GLib.timeout_add_seconds(self.refresh,
+                                                 self.update_status)
         Gtk.main()
 
 
@@ -213,8 +215,5 @@ class BoincIndicator(object):
 if __name__ == "__main__":
     GLib.set_application_name(__appname__)
     GLib.set_prgname(__apptag__)
-    theme_path = os.path.join(os.path.dirname(sys.argv[0]), "images")
-    ind = BoincIndicator(theme_path)
+    ind = BoincIndicator()
     sys.exit(ind.main())
-else:
-    theme_path = os.path.join(os.path.dirname(__file__), "images")
