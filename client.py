@@ -24,20 +24,32 @@ import gui_rpc_client
 
 class BoincClient(object):
 
-    def __init__(self, **kwargs):
-        self.rpc = gui_rpc_client.RpcClient()
+    def __init__(self, host="", passwd=""):
+        host = host.split(':', 1)
 
-        host = kwargs.setdefault('host', "").split(':', 1)
+        self.hostname  = host[0]
+        self.port      = int(host[1]) if len(host)==2 else 0
+        self.passwd    = passwd or gui_rpc_client.read_gui_rpc_password()
+        self.rpc       = gui_rpc_client.RpcClient()
+        self.version   = None
 
-        self.hostname = host[0]
-        self.port     = int(host[1]) if len(host)==2 else 0
+        # Informative, not authoritative. Records status of *last* RPC call,
+        # but does not infer success about the *next* one.
+        # Thus, it should be read *after* an RPC call, not prior to one
+        self.connected = False
 
-        self.passwd   = kwargs.setdefault('passwd',
-                                          gui_rpc_client.read_gui_rpc_password())
 
+    def connect(self):
         self.rpc.init(self.hostname, self.port)
-
-        if self.passwd:
-            self.rpc.authorize(self.passwd)
-
+        if self.passwd: self.rpc.authorize(self.passwd)
         self.version = self.rpc.exchange_versions()
+        self.connected = True
+
+
+    def get_cc_status(self):
+        if not self.connected:
+            self.connect()
+        try:
+            return self.rpc.get_cc_status()
+        except gui_rpc_client.BoincException:
+            self.connected = False
