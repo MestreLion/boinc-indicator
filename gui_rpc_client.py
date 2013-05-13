@@ -156,6 +156,9 @@ class VersionInfo(object):
         if (self.release > vi.release): return True;
         return False;
 
+    def __str__(self):
+        return "%d.%d.%d" % (self.major, self.minor, self.release)
+
 # #endif common_defs.h
 
 # #include "diagnostics.h"

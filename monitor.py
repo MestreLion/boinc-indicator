@@ -26,7 +26,7 @@ import webbrowser
 
 from gi.repository import Gtk, GLib, AppIndicator3
 
-#from client import BoincClient as boinc
+import client
 
 # gettext stub, for future translations
 def _(text, *args):
@@ -70,6 +70,7 @@ class BoincIndicator(object):
         self.label_pause  = _('suspended')
         self.label_error  = _('disconnected')
 
+        self.boinc = client.BoincClient()
         self.connected = True
         self.suspended = False
         self.gpu_suspended = False
@@ -87,6 +88,8 @@ class BoincIndicator(object):
         self.menu = {}
 
         menu_items = [
+            ['status_version',     ""],
+            [],
             ['website',            _('Open BOINC _Web...')],
             ['manager',            _('Open BOINC _Manager...')],
             [],
@@ -104,6 +107,8 @@ class BoincIndicator(object):
                 itm = cls.new_with_mnemonic(item[1])
                 hdl = getattr(self, 'handler_' + item[0], None)
                 itm.connect("activate", hdl or self.handler_generic)
+                if item[0].startswith('status'):
+                    itm.set_sensitive(False)
                 gtkmenu.append(itm)
                 self.menu[item[0]] = itm
             else:
@@ -136,12 +141,14 @@ class BoincIndicator(object):
         #       before entering Gtk.main()! An invisible indicator has no means
         #       to exit app, and KeyboardInterrupt does not work with Gtk.main()
         #       See: https://bugzilla.gnome.org/show_bug.cgi?id=622084
+        self.boinc.connect()
         self._timerid = GLib.timeout_add_seconds(self.refresh,
                                                  self.update_status)
         Gtk.main()
 
 
     def quit(self):
+        self.boinc.disconnect()
         Gtk.main_quit()
 
 
@@ -156,14 +163,14 @@ class BoincIndicator(object):
     def handler_suspend_resume(self, src):
         #TODO: This is mock-up. When API is ready, GUI should do nothing but:
         #      boinc.set_run_mode(NEVER); self.update_status()
-        self.suspended = not self.suspended
+        #self.suspended = not self.suspended
         self.update_status(force=True)
 
 
     def handler_suspend_resume_gpu(self, src):
         #TODO: This is mock-up. When API is ready, GUI should do nothing but:
         #      boinc.set_gpu_mode(NEVER); self.update_status()
-        self.gpu_suspended = not self.gpu_suspended
+        #self.gpu_suspended = not self.gpu_suspended
         self.update_status(force=True)
 
 
@@ -181,8 +188,8 @@ class BoincIndicator(object):
         about.set_translator_credits(_("translator-credits"))
         about.set_license_type(Gtk.License.GPL_3_0)
         about.set_copyright('Copyright (C) 2013 Rodrigo Silva')
-        self.about.run()
-        self.about.destroy()
+        about.run()
+        about.destroy()
 
 
     def handler_quit(self, src):
@@ -194,18 +201,31 @@ class BoincIndicator(object):
         #      to fetch status and set GUI. Flags such as self.suspended
         #      will likely not be needed, or used only to compare previous
         #      state to avoid re-setting GUI
-        if not force:
-            return True
 
-        if self.suspended:
+        status = self.boinc.get_cc_status()
+        if not self.boinc.connected:
+            self.menu['suspend_resume'].set_sensitive(False)
             self.menu['suspend_resume_gpu'].set_sensitive(False)
-            self.ind.set_icon(self.icon_pause)
+            self.menu['status_version'].set_label('Not connected')
+            self.ind.set_icon(self.icon_error)
         else:
-            self.menu['suspend_resume_gpu'].set_sensitive(True)
-            if self.gpu_suspended:
-                self.ind.set_icon(self.icon_pause_gpu)
+            self.menu['suspend_resume'].set_sensitive(True)
+            self.menu['status_version'].set_label(_('BOINC client version: %s'
+                                                    % self.boinc.version))
+            if status.task_suspend_reason > 0:
+                self.menu['suspend_resume'].set_active(True)
+                self.menu['suspend_resume_gpu'].set_active(False)
+                self.menu['suspend_resume_gpu'].set_sensitive(False)
+                self.ind.set_icon(self.icon_pause)
             else:
-                self.ind.set_icon(self.icon_normal)
+                self.menu['suspend_resume'].set_active(False)
+                self.menu['suspend_resume_gpu'].set_sensitive(True)
+                if status.gpu_suspend_reason > 0:
+                    self.menu['suspend_resume_gpu'].set_active(True)
+                    self.ind.set_icon(self.icon_pause_gpu)
+                else:
+                    self.menu['suspend_resume_gpu'].set_active(False)
+                    self.ind.set_icon(self.icon_normal)
 
         return True  # returning False would deactivate update timer
 

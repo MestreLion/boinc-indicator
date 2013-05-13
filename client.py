@@ -21,6 +21,7 @@
 # Based on client/boinc_cmd.cpp
 
 import gui_rpc_client
+import socket
 
 class BoincClient(object):
 
@@ -39,11 +40,28 @@ class BoincClient(object):
         self.connected = False
 
 
+    def __enter__(self):
+        self.connect()
+        return self
+
+
+    def __exit__(self, *args):
+        self.disconnect()
+
+
     def connect(self):
-        self.rpc.init(self.hostname, self.port)
-        if self.passwd: self.rpc.authorize(self.passwd)
-        self.version = self.rpc.exchange_versions()
-        self.connected = True
+        self.disconnect()
+        try:
+            self.rpc.init(self.hostname, self.port)
+            if self.passwd: self.rpc.authorize(self.passwd)
+            self.version = self.rpc.exchange_versions()
+            self.connected = True
+        except socket.error:
+            self.connected = False
+
+
+    def disconnect(self):
+        self.rpc.close()
 
 
     def get_cc_status(self):
@@ -51,5 +69,5 @@ class BoincClient(object):
             self.connect()
         try:
             return self.rpc.get_cc_status()
-        except gui_rpc_client.BoincException:
+        except (gui_rpc_client.BoincException, socket.error):
             self.connected = False
