@@ -1130,6 +1130,7 @@ class CcStatus(object):
 
 # struct RPC_CLIENT {
 class RpcClient(object):
+
     def __init__(self):
 #     int sock;
         self.sock = -1
@@ -1180,9 +1181,6 @@ class RpcClient(object):
         return mf + buf[:n]
 
 
-#     RPC_CLIENT();
-#     ~RPC_CLIENT();
-
     #int get_ip_addr(const char* host, int port);
     def get_ip_addr(self, host, port):
         ''' Set self.addr to a (5-tuple) suitable for socket connection
@@ -1221,7 +1219,16 @@ class RpcClient(object):
 #         // retry: if true, keep retrying until succeed or timeout.
 #         //    Use this if just launched the core client.
 #     int init_poll();
-#     void close();
+
+
+    # // if any RPC returns ERR_READ or ERR_WRITE,
+    # // call this and then call init() again.
+    # //
+    #void close();
+    def close(self):
+        if self.sock > -1:
+            self.sock.close()
+            self.sock = -1;
 
 
     #int authorize(const char* passwd);
