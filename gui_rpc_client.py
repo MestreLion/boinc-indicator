@@ -20,26 +20,48 @@
 
 # Based on lib/gui_rpc_client*.{h,cpp}
 
-# #ifndef _GUI_RPC_CLIENT_H_
-# #define _GUI_RPC_CLIENT_H_
-#
-# #if !defined(_WIN32) || defined (__CYGWIN__)
-# #include <cstdio>
-# #include <string>
-import xml.etree.ElementTree as ET
+
+from xml.etree import ElementTree
 import StringIO
-# #include <vector>
-# #include <sys/socket.h>
 import socket
-# #include <sys/param.h>
-# #include <netinet/in.h>
-# #include <netinet/tcp.h>
-# #include <arpa/inet.h>
-# #include <netdb.h>
-# #include <locale.h>
+
+# #
+# // This file contains:
+# // 1) functions to clear and parse the various structs
+# // 2) actual GUI RPCs
+#
+# // The core client expects all data to be formatted in the "C" locale,
+# // so each GUI RPC should get the current locale, then switch to the
+# // "C" locale before formatting messages or parsing results.
+# // After all work is completed, revert back to the original locale.
+# //
+# // Template:
+# //
+# // int RPC_CLIENT::template_function( args ) {
+# //     int retval;
+# //     SET_LOCALE sl;
+# //     char buf[256];
+# //     RPC rpc(this);
+# //
+# //     <do something useful>
+# //
+# //     return retval;
+# // }
+# //
+# // NOTE: Failing to revert back to the original locale will cause
+# //   formatting failures for any software that has been localized or
+# //   displays localized data.
+#
+#
+# #if defined(_WIN32) && !defined(__STDWX_H__) && !defined(_BOINC_WIN_) && !defined(_AFX_STDAFX_H_)
+# #include "boinc_win.h"
 # #endif
 #
-# #include "cc_config.h"
+# #ifdef _WIN32
+# #include "../version.h"
+# #else
+# #include "config.h"
+# #endif
 
 ''' Version number relates to the BOINC version this API was based on '''
 
@@ -52,32 +74,403 @@ BOINC_MINOR_VERSION = 0
 ''' Release part of BOINC version number '''
 BOINC_RELEASE = 65
 
+
+# #include "str_util.h"
+# #include "util.h"
+# #include "error_numbers.h"
+# #include "miofile.h"
+# #include "md5_file.h"
+# #include "network.h"
+
+
 # #include "common_defs.h"
+# #ifndef _COMMON_DEFS_
+# #define _COMMON_DEFS_
+
+# // #defines or enums that are shared by more than one BOINC component
+# // (e.g. client, server, Manager, etc.)
 GUI_RPC_PASSWD_FILE = "/etc/boinc-client/gui_rpc_auth.cfg"
 GUI_RPC_PORT        = 31416
 
+# // values of "network status"
+NETWORK_STATUS_ONLINE          = 0
+NETWORK_STATUS_WANT_CONNECTION = 1
+NETWORK_STATUS_WANT_DISCONNECT = 2
+NETWORK_STATUS_LOOKUP_PENDING  = 3
+
+# struct TIME_STATS {
+class TimeStats(object):
+    pass
+# // we maintain an exponentially weighted average of these quantities:
+#     double now;
+#         // the client's time of day
+#     double on_frac;
+#         // the fraction of total time this host runs the client
+#     double connected_frac;
+#         // of the time this host runs the client,
+#         // the fraction it is connected to the Internet,
+#         // or -1 if not known
+#     double cpu_and_network_available_frac;
+#         // of the time this host runs the client,
+#         // the fraction it is connected to the Internet
+#         // AND network usage is allowed (by prefs and user toggle)
+#         // AND CPU usage is allowed
+#     double active_frac;
+#         // of the time this host runs the client,
+#         // the fraction it is enabled to use CPU
+#         // (as determined by preferences, manual suspend/resume, etc.)
+#     double gpu_active_frac;
+#         // same, GPU
+#     double client_start_time;
+#     double previous_uptime;
+#         // duration of previous session
+#
+#     void write(MIOFILE&);
+#     int parse(XML_PARSER&);
+#     void print();
+# };
+
+# struct VERSION_INFO {
 class VersionInfo(object):
+
     def __init__(self):
         self.major     = 0
         self.minor     = 0
         self.release   = 0
         self.prerelase = False
 
-    def parse(self, miofile):
+    #int parse(MIOFILE&);
+    def parse(self, input):
         pass
 
-    def write(self, miofile):
+    #void write(MIOFILE&);
+    def write(self, output):
         pass
 
-    def greater_than(self, version_info):
-        return False
+    #bool greater_than(VERSION_INFO&);
+    def greater_than(self, vi):
+        if (self.major > vi.major): return True;
+        if (self.major < vi.major): return False;
+        if (self.minor > vi.minor): return True;
+        if (self.minor < vi.minor): return False;
+        if (self.release > vi.release): return True;
+        return False;
 
+# #endif common_defs.h
+
+# #include "diagnostics.h"
+
+
+# #include "parse.h"
+# struct XML_PARSER {
+class XmlParser(object):
+    #XML_PARSER::XML_PARSER(MIOFILE* _f)
+    def __init__(self, _f):
+        #MIOFILE* f;
+        self.f = _f
+
+    #void init(MIOFILE* mf)
+    def init(self, mf):
+        self.f = mf
+
+
+# #include "gui_rpc_client.h"
+# #ifndef _GUI_RPC_CLIENT_H_
+# #define _GUI_RPC_CLIENT_H_
+# #include "cc_config.h"
 # #include "filesys.h"
 # #include "hostinfo.h"
+# #ifndef _HOSTINFO_
+# #define _HOSTINFO_
+#
+# // Description of a host's hardware and software.
+# // This is used a few places:
+# // - it's part of the client's state file, client_state.xml
+# // - it's passed in the reply to the get_host_info GUI RPC
+# // - it's included in scheduler RPC requests
+# //
+# // Other host-specific info is kept in
+# // TIME_STATS (on/connected/active fractions)
+# // NET_STATS (average network bandwidths)
+#
+# #include "miofile.h"
+# #include "coproc.h"
+#
+# // if you add fields, update clear_host_info()
+#
+# class HOST_INFO {
+class HostInfo(object):
+    pass
+# public:
+#     int timezone;                 // local STANDARD time - UTC time (in seconds)
+#     char domain_name[256];
+#     char serialnum[256];
+#     char ip_addr[256];
+#     char host_cpid[64];
+#
+#     int p_ncpus;
+#     char p_vendor[256];
+#     char p_model[256];
+#     char p_features[1024];
+#     double p_fpops;
+#     double p_iops;
+#     double p_membw;
+#     double p_calculated;          // when benchmarks were last run, or zero
+#     bool p_vm_extensions_disabled;
+#
+#     double m_nbytes;              // Total amount of memory in bytes
+#     double m_cache;
+#     double m_swap;                // Total amount of swap space in bytes
+#
+#     double d_total;               // Total amount of disk in bytes
+#     double d_free;                // Total amount of free disk in bytes
+#
+#     char os_name[256];
+#     char os_version[256];
+#
+#     // the following is non-empty if VBox is installed
+#     //
+#     char virtualbox_version[256];
+#
+#     COPROCS coprocs;
+#
+# #ifdef ANDROID
+#     int battery_charge_pct;
+#     int battery_state;
+#     double battery_temperature_celsius;
+#     void get_battery_status();
+# #endif
+#
+#     HOST_INFO();
+#     int parse(XML_PARSER&, bool benchmarks_only = false);
+#     int write(MIOFILE&, bool include_net_info, bool include_coprocs);
+#     int parse_cpu_benchmarks(FILE*);
+#     int write_cpu_benchmarks(FILE*);
+#     void print();
+#
+#     bool host_is_running_on_batteries();
+# #ifdef __APPLE__
+#     bool users_idle(bool check_all_logins, double idle_time_to_run, double *actual_idle_time=NULL);
+# #else
+#     bool users_idle(bool check_all_logins, double idle_time_to_run);
+# #endif
+# #ifdef ANDROID
+#     bool host_wifi_online();
+# #endif
+#     int get_host_info();
+#     int get_host_battery_charge();
+#     int get_host_battery_state();
+#     int get_local_network_info();
+#     int get_virtualbox_version();
+#     void clear_host_info();
+#     void make_random_string(const char* salt, char* out);
+#     void generate_host_cpid();
+# };
+#
+# #ifdef __APPLE__
+# #ifdef __cplusplus
+# extern "C" {
+# #endif
+#
+# #include <IOKit/hidsystem/IOHIDLib.h>
+# #include <IOKit/hidsystem/IOHIDParameter.h>
+# #include <IOKit/hidsystem/event_status_driver.h>
+#
+# bool isDualGPUMacBook();
+#
+# // Apple has removed NxIdleTime() beginning with OS 10.6, so we must try
+# // loading it at run time to avoid a link error.  For details, please see
+# // the comments in the __APPLE__ version of HOST_INFO::users_idle() in
+# // client/hostinfo_unix.cpp.
+# typedef double (*nxIdleTimeProc)(NXEventHandle handle);
+# #ifdef __cplusplus
+# }    // extern "C"
+# #endif
+#
+# extern NXEventHandle gEventHandle;
+# #endif
+#
+# #endif
+
 # #include "miofile.h"
 # #include "network.h"
 # #include "notice.h"
 # #include "prefs.h"
+# // global prefs are maintained as follows:
+# // 1) a "global_prefs.xml" file, which stores the "network" prefs;
+# //      it's maintained by communication with scheduling servers
+# //      or project managers
+# // 2) a "global_prefs_override.xml" file, which can be edited manually
+# //      or via a GUI.
+# //      For the prefs that it specifies, it overrides the network prefs.
+#
+# // A struct with one bool per pref.
+# // This is passed in GUI RPCs (get/set_global_prefs_override_struct)
+# // to indicate which prefs are (or should be) specified in the override file
+# //
+# struct GLOBAL_PREFS_MASK {
+#     bool confirm_before_connecting;
+#     bool cpu_scheduling_period_minutes;
+#     bool cpu_usage_limit;
+#     bool daily_xfer_limit_mb;
+#     bool daily_xfer_period_days;
+#     bool disk_interval;
+#     bool disk_max_used_gb;
+#     bool disk_max_used_pct;
+#     bool disk_min_free_gb;
+#     bool dont_verify_images;
+#     bool end_hour;
+#     bool hangup_if_dialed;
+#     bool idle_time_to_run;
+#     bool leave_apps_in_memory;
+#     bool max_bytes_sec_down;
+#     bool max_bytes_sec_up;
+#     bool max_ncpus;
+#     bool max_ncpus_pct;
+#     bool net_end_hour;
+#     bool net_start_hour;
+#     bool network_wifi_only;
+#     bool ram_max_used_busy_frac;
+#     bool ram_max_used_idle_frac;
+#     bool run_if_user_active;
+#     bool run_gpu_if_user_active;
+#     bool run_on_batteries;
+#     bool start_hour;
+#     bool suspend_cpu_usage;
+#     bool suspend_if_no_recent_input;
+#     bool vm_max_used_frac;
+#     bool work_buf_additional_days;
+#     bool work_buf_min_days;
+#
+#     GLOBAL_PREFS_MASK();
+#     void clear();
+#     bool are_prefs_set();
+#     bool are_simple_prefs_set();
+#     void set_all();
+# };
+#
+#
+# // 0..24
+# // run always if start==end or start==0, end=24
+# // don't run at all if start=24, end=0
+# //
+# struct TIME_SPAN {
+#     bool present;
+#     double start_hour;
+#     double end_hour;
+#
+#     enum TimeMode {
+#         Always = 7000,
+#         Never,
+#         Between
+#     };
+#     TIME_SPAN() : start_hour(0), end_hour(0) {}
+#     TIME_SPAN(double start, double end) : start_hour(start), end_hour(end) {}
+#
+#     bool suspended(double hour) const;
+#     TimeMode mode() const;
+# };
+#
+#
+# struct WEEK_PREFS {
+#     TIME_SPAN days[7];
+#
+#     void clear() {
+#         memset(this, 0, sizeof(WEEK_PREFS));
+#     }
+#     WEEK_PREFS() {
+#         clear();
+#     }
+#
+#     void set(int day, double start, double end);
+#     void set(int day, TIME_SPAN* time);
+#     void unset(int day);
+#
+# protected:
+#     void copy(const WEEK_PREFS& original);
+# };
+#
+#
+# struct TIME_PREFS : public TIME_SPAN {
+#     WEEK_PREFS week;
+#
+#     TIME_PREFS() {}
+#     TIME_PREFS(double start, double end) {
+#         start_hour = start;
+#         end_hour = end;
+#     }
+#
+#     void clear();
+#     bool suspended(double t);
+#
+# };
+#
+#
+# struct GLOBAL_PREFS {
+class GlobalPrefs(object):
+    pass
+#     double mod_time;
+#
+#     bool confirm_before_connecting;
+#     double cpu_scheduling_period_minutes;
+#         // length of a time slice.
+#         // scheduling happens more often.
+#     TIME_PREFS cpu_times;
+#     double cpu_usage_limit;
+#     double daily_xfer_limit_mb;
+#     int daily_xfer_period_days;
+#     double disk_interval;
+#     double disk_max_used_gb;
+#     double disk_max_used_pct;
+#     double disk_min_free_gb;
+#     bool dont_verify_images;
+#     bool hangup_if_dialed;
+#     double idle_time_to_run;
+#     bool leave_apps_in_memory;
+#     double max_bytes_sec_down;
+#     double max_bytes_sec_up;
+#     int max_ncpus;
+#     double max_ncpus_pct;
+#     TIME_PREFS net_times;
+#     bool network_wifi_only;
+#         // introduced with Android. Do network communication only when on Wifi,
+#         // not on public cell networks.
+#         // CAUTION: this only applies to file transfers.
+#         // scheduler RPCs are made regardless of this preference.
+#     double ram_max_used_busy_frac;
+#     double ram_max_used_idle_frac;
+#     bool run_gpu_if_user_active;
+#     bool run_if_user_active;
+#     bool run_on_batteries;
+#         // poorly named; what it really means is:
+#         // if false, suspend while on batteries
+#     double suspend_cpu_usage;
+#     double suspend_if_no_recent_input;
+#     double vm_max_used_frac;
+#     double work_buf_additional_days;
+#     double work_buf_min_days;
+#
+#     char source_project[256];
+#     char source_scheduler[256];
+#     bool host_specific;
+#         // an account manager can set this; if set, don't propagate
+#     bool override_file_present;
+#
+#     GLOBAL_PREFS();
+#     void defaults();
+#     void init();
+#     void clear_bools();
+#     int parse(XML_PARSER&, const char* venue, bool& found_venue, GLOBAL_PREFS_MASK& mask);
+#     int parse_day(XML_PARSER&);
+#     int parse_override(XML_PARSER&, const char* venue, bool& found_venue, GLOBAL_PREFS_MASK& mask);
+#     int parse_file(const char* filename, const char* venue, bool& found_venue);
+#     int write(MIOFILE&);
+#     int write_subset(MIOFILE&, GLOBAL_PREFS_MASK&);
+#     void write_day_prefs(MIOFILE&);
+#     inline double cpu_scheduling_period() {
+#         return cpu_scheduling_period_minutes*60;
+#     }
+# };
 #
 # struct GUI_URL {
 #     std::string name;
@@ -155,6 +548,8 @@ class VersionInfo(object):
 # };
 #
 # struct PROJECT {
+class Project(object):
+    pass
 #     char master_url[256];
 #     double resource_share;
 #     std::string project_name;
@@ -220,6 +615,8 @@ class VersionInfo(object):
 # };
 #
 # struct APP {
+class App(object):
+    pass
 #     char name[256];
 #     char user_friendly_name[256];
 #     PROJECT* project;
@@ -233,6 +630,8 @@ class VersionInfo(object):
 # };
 #
 # struct APP_VERSION {
+class AppVersion(object):
+    pass
 #     char app_name[256];
 #     int version_num;
 #     char platform[64];
@@ -276,6 +675,8 @@ class VersionInfo(object):
 # };
 #
 # struct RESULT {
+class Result(object):
+    pass
 #     char name[256];
 #     char wu_name[256];
 #     char project_url[256];
@@ -368,6 +769,8 @@ class VersionInfo(object):
 # };
 #
 # struct MESSAGE {
+class Message(object):
+    pass
 #     std::string project;
 #     int priority;
 #     int seqno;
@@ -412,23 +815,38 @@ class VersionInfo(object):
 # // Call get_state() infrequently.
 # //
 # struct CC_STATE {
-#     std::vector<PROJECT*> projects;
-#     std::vector<APP*> apps;
-#     std::vector<APP_VERSION*> app_versions;
-#     std::vector<WORKUNIT*> wus;
-#     std::vector<RESULT*> results;
-#     std::vector<std::string> platforms;
-#         // platforms supported by client
-#     GLOBAL_PREFS global_prefs;  // working prefs, i.e. network + override
-#     VERSION_INFO version_info;  // populated only if talking to pre-5.6 client
-#     bool executing_as_daemon;   // true if client is running as a service / daemon
-#     HOST_INFO host_info;
-#     TIME_STATS time_stats;
-#     bool have_nvidia;           // deprecated; include for compat (set by <have_cuda/>)
-#     bool have_ati;              // deprecated; include for compat
-#
-#     CC_STATE();
-#     ~CC_STATE();
+class CcState(object):
+    def __init__(self):
+        #std::vector<PROJECT*> projects;
+        self.projects = []
+        #std::vector<APP*> apps;
+        self.apps = []
+        #std::vector<APP_VERSION*> app_versions;
+        self.app_versions = []
+        #std::vector<WORKUNIT*> wus;
+        self.wus = []
+        #std::vector<RESULT*> results;
+        self.results = []
+        #std::vector<std::string> platforms;
+        self.platforms = []
+        #// platforms supported by client
+
+        #GLOBAL_PREFS global_prefs;  // working prefs, i.e. network + override
+        self.global_prefs = GlobalPrefs()
+        #VERSION_INFO version_info;  // populated only if talking to pre-5.6 client
+        self.version_info = VersionInfo()
+        #bool executing_as_daemon;   // true if client is running as a service / daemon
+        self.executing_as_daemon = False
+        #HOST_INFO host_info;
+        self.host_info = HostInfo()
+        #TIME_STATS time_stats;
+        self.time_stats = TimeStats()
+        #bool have_nvidia;           // deprecated; include for compat (set by <have_cuda/>)
+        self.have_nvidia = False
+        #bool have_ati;              // deprecated; include for compat
+        self.have_ati = False
+
+        self.clear()
 #
 #     PROJECT* lookup_project(const char* url);
 #     APP* lookup_app(PROJECT*, const char* name);
@@ -439,14 +857,16 @@ class VersionInfo(object):
 #     RESULT* lookup_result(const char* url, const char* name);
 #
 #     void print();
-#     void clear();
-#     int parse(XML_PARSER&);
-#     inline bool have_gpu() {
-#         return !host_info.coprocs.none()
-#             || have_nvidia || have_ati      // for old clients
-#         ;
-#     }
-# };
+
+
+    #void clear();
+    def clear(self):
+        pass
+
+
+    #int parse(XML_PARSER&);
+    def parse(self, xp):
+        pass
 #
 # struct PROJECTS {
 #     std::vector<PROJECT*> projects;
@@ -618,33 +1038,74 @@ class VersionInfo(object):
 #     void clear();
 #     void print();
 # };
-#
-# struct CC_STATUS {
-#     int network_status;         // values: NETWORK_STATUS_*
-#     bool ams_password_error;
-#     bool manager_must_quit;
-#     int task_suspend_reason;    // bitmap, see common_defs.h
-#     int task_mode;              // always/auto/never; see common_defs.h
-#     int task_mode_perm;            // same, but permanent version
-#     double task_mode_delay;        // time until perm becomes actual
-#     int gpu_suspend_reason;
-#     int gpu_mode;
-#     int gpu_mode_perm;
-#     double gpu_mode_delay;
-#     int network_suspend_reason;
-#     int network_mode;
-#     int network_mode_perm;
-#     double network_mode_delay;
-#     bool disallow_attach;
-#     bool simple_gui_only;
-#
-#     CC_STATUS();
-#     ~CC_STATUS();
-#
-#     int parse(XML_PARSER&);
-#     void clear();
-#     void print();
+
+
+#struct CC_STATUS {
+class CcStatus(object):
+    def __init__(self):
+        self.clear()
+
+
+    #void clear();
+    def clear(self):
+        self.network_status         = -1    #// values: NETWORK_STATUS_*
+        self.ams_password_error     = False
+        self.manager_must_quit      = False
+        self.task_suspend_reason    = -1    #// bitmap, see common_defs.h
+        self.task_mode              = -1    #// always/auto/never; see common_defs.h
+        self.task_mode_perm         = -1    #// same, but permanent version
+        self.task_mode_delay        =  0.0  #// time until perm becomes actual
+        self.network_suspend_reason = -1
+        self.network_mode           = -1
+        self.network_mode_perm      = -1
+        self.network_mode_delay     =  0.0
+        self.gpu_suspend_reason     = -1
+        self.gpu_mode               = -1
+        self.gpu_mode_perm          = -1
+        self.gpu_mode_delay         =  0.0
+        self.disallow_attach        = False
+        self.simple_gui_only        = False
+
+
+    #int parse(XML_PARSER&);
+    #int CC_STATUS::parse(XML_PARSER& xp) {
+    def parse(self, xp):
+        #PS: As per original code, parse() is able to read the broken XML, so we
+        #    can't simply use ElementTree in the whole file. We gotta loop it
+        #    line-by-line and parse each fragment. Lame
+        for buf in xp.f:
+            if '</cc_status>' in buf:
+                return
+
+            e = ElementTree.fromstring(buf)
+            try:
+                if   e.tag == 'network_status':         self.network_status         = int  (e.text)
+                elif e.tag == 'ams_password_error':     self.ams_password_error     = bool (e.text)
+                elif e.tag == 'manager_must_quit':      self.manager_must_quit      = bool (e.text)
+                elif e.tag == 'task_suspend_reason':    self.task_suspend_reason    = int  (e.text)
+                elif e.tag == 'task_mode':              self.task_mode              = int  (e.text)
+                elif e.tag == 'task_mode_perm':         self.task_mode_perm         = int  (e.text)
+                elif e.tag == 'task_mode_delay':        self.task_mode_delay        = float(e.text)
+                elif e.tag == 'gpu_suspend_reason':     self.gpu_suspend_reason     = int  (e.text)
+                elif e.tag == 'gpu_mode':               self.gpu_mode               = int  (e.text)
+                elif e.tag == 'gpu_mode_perm':          self.gpu_mode_perm          = int  (e.text)
+                elif e.tag == 'gpu_mode_delay':         self.gpu_mode_delay         = float(e.text)
+                elif e.tag == 'network_suspend_reason': self.network_suspend_reason = int  (e.text)
+                elif e.tag == 'network_mode':           self.network_mode           = int  (e.text)
+                elif e.tag == 'network_mode_perm':      self.network_mode_perm      = int  (e.text)
+                elif e.tag == 'network_mode_delay':     self.network_mode_delay     = float(e.text)
+                elif e.tag == 'disallow_attach':        self.disallow_attach        = bool (e.text)
+                elif e.tag == 'simple_gui_only':        self.simple_gui_only        = bool (e.text)
+            except ValueError:
+                pass
+
+        raise BoincException("ERR_XML_PARSE")
+
+
+    #void print();
 # };
+
+
 #
 # struct SIMPLE_GUI_INFO {
 #     std::vector<PROJECT*> projects;
@@ -691,7 +1152,12 @@ class RpcClient(object):
             "%s"\
             "</boinc_gui_rpc_request>\n\003"\
              % (p)
-        self.sock.sendall(buf)
+
+        try:
+            self.sock.sendall(buf)
+        except (socket.error, socket.herror, socket.gaierror, socket.timeout):
+            #DIFF: throws original exception instead of "ERR_WRITE"
+            raise
 
 
     #// get reply from server.  Caller must free buf
@@ -756,9 +1222,12 @@ class RpcClient(object):
 #         //    Use this if just launched the core client.
 #     int init_poll();
 #     void close();
+
+
     #int authorize(const char* passwd);
     def authorize(self, passwd):
         pass
+
 
     #int exchange_versions(VERSION_INFO&);
     def exchange_versions(self):
@@ -778,18 +1247,45 @@ class RpcClient(object):
             BOINC_RELEASE)
 
         rpc.do_rpc(buf)
-        for buf in ET.parse(rpc.fin).iter():
+        for buf in ElementTree.parse(rpc.fin).iter():
             try:
                 if   buf.tag == 'major'  : server.major   = int(buf.text)
                 elif buf.tag == 'minor'  : server.minor   = int(buf.text)
                 elif buf.tag == 'release': server.release = int(buf.text)
             except ValueError:
-                pass
+                pass  # error in int() conversion
 
         return server
 
 
-#     int get_state(CC_STATE&);
+    #int get_state(CC_STATE&);
+    def get_state(self):
+        ''' Return a CcState object with entire client state info
+        '''
+        rpc = Rpc(self)
+        rpc.do_rpc("<get_state/>\n")
+        state = CcState()
+        return state.parse(rpc.xp);
+
+
+    #int get_cc_status(CC_STATUS&);
+    #int RPC_CLIENT::get_cc_status(CC_STATUS& status) {
+    def get_cc_status(self):
+        status = CcStatus()
+        rpc = Rpc(self)
+        rpc.do_rpc("<get_cc_status/>\n")
+
+        #PS: this loop is just to position rpc.fin after '<cc_status>'
+        #    so status.parse() is not even called if tag does not exist.
+        #    As a side effect, it also pass a broken XML file to it:(
+        for buf in rpc.fin:
+            if '<cc_status>' in buf:
+                status.parse(rpc.xp)
+                break
+
+        return status
+
+
 #     int get_results(RESULTS&, bool active_only = false);
 #     int get_file_transfers(FILE_TRANSFERS&);
 #     int get_simple_gui_info(SIMPLE_GUI_INFO&);
@@ -846,7 +1342,8 @@ class RpcClient(object):
 #     int get_newer_version(std::string&, std::string&);
 #     int read_global_prefs_override();
 #     int read_cc_config();
-#     int get_cc_status(CC_STATUS&);
+
+
 #     int get_global_prefs_file(std::string&);
 #     int get_global_prefs_working(std::string&);
 #     int get_global_prefs_working_struct(GLOBAL_PREFS&, GLOBAL_PREFS_MASK&);
@@ -862,22 +1359,22 @@ class BoincException(Exception): pass
 
 # struct RPC {
 class Rpc(object):
+    #RPC(RPC_CLIENT*);
     def __init__(self, rpc_client):
         ''' set self.rpc_client as the given object. It could be understood as
-            the "caller" (or owner, parent) object, the one it use methods
+            the "caller" (or owner, parent) object, the one it uses methods
             like send_request() and get_reply()
         '''
 #     char* mbuf;
         self.mbuf = ""
 #     MIOFILE fin;
-        self.fin  = None
+        self.fin  = StringIO.StringIO()
 #     XML_PARSER xp;
-        self.xp   = None
+        self.xp   = XmlParser(self.fin)
 #     RPC_CLIENT* rpc_client;
         self.rpc_client = rpc_client
-#
-#     RPC(RPC_CLIENT*);
-#     ~RPC();
+
+
     #int do_rpc(const char*);
     def do_rpc(self, req):
         ''' Send request and store reply in self.mbuf (string) and
@@ -889,7 +1386,8 @@ class Rpc(object):
 
         self.rpc_client.send_request(req)
         self.mbuf = self.rpc_client.get_reply()
-        self.fin = StringIO.StringIO(self.mbuf)
+        self.fin.write(self.mbuf)
+        self.fin.seek(0)
 
 #     int parse_reply();
 # };
@@ -1004,3 +1502,8 @@ if __name__ == "__main__":
 
     version = rpc.exchange_versions()
     print "version: %d.%d.%d" % (version.major, version.minor, version.release)
+
+    status = rpc.get_cc_status()
+    print "get_cc_status:"
+    for item in status.__dict__:
+        print '\t%s\t%s' % (item, getattr(status, item))
