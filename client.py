@@ -29,7 +29,64 @@ from xml.etree import ElementTree
 
 GUI_RPC_PASSWD_FILE = "/etc/boinc-client/gui_rpc_auth.cfg"
 
+class Enum(object):
+    @classmethod
+    def name(cls, value):
+        ''' Quick-and-dirty way of getting the "name" of an enum item '''
+        for k, v in cls.__dict__.items():
+            if v == value:
+                return k.lower().replace('_', ' ').capitalize()
+
+
+class NetworkStatus(Enum):
+    ''' Values of "network_status" '''
+    ONLINE                 =    0
+    WANT_CONNECTION        =    1
+    WANT_DISCONNECT        =    2
+    LOOKUP_PENDING         =    3
+
+
+class SuspendReason(Enum):
+    ''' bitmap defs for task_suspend_reason, network_suspend_reason
+        Note: doesn't need to be a bitmap, but keep for compatibility
+    '''
+    BATTERIES              =    1
+    USER_ACTIVE            =    2
+    USER_REQ               =    4
+    TIME_OF_DAY            =    8
+    BENCHMARKS             =   16
+    DISK_SIZE              =   32
+    CPU_THROTTLE           =   64
+    NO_RECENT_INPUT        =  128
+    INITIAL_DELAY          =  256
+    EXCLUSIVE_APP_RUNNING  =  512
+    CPU_USAGE              = 1024
+    NETWORK_QUOTA_EXCEEDED = 2048
+    OS                     = 4096
+    WIFI_STATE             = 4097
+    BATTERY_CHARGING       = 4098
+    BATTERY_OVERHEATED     = 4099
+
+
+class RunMode(object):
+    ''' Run modes for CPU, GPU, network,
+        controlled by Activity menu and snooze button
+    '''
+    ALWAYS                 =    1
+    AUTO                   =    2
+    NEVER                  =    3
+    RESTORE                =    4
+        # restore permanent mode - used only in set_X_mode() GUI RPC
+
+
 def setattrs_from_xml(obj, xml, attrfuncdict={}):
+    ''' Helper to set values for attributes of a class instance by mapping
+        matching tags from a XML file.
+        attrfuncdict is a dict of functions to customize value data type of
+        each attribute. It falls back to simple int/float/bool/str detection
+        based on values defined in __init__(). This would not be needed if
+        Boinc used standard RPC protocol, which includes data type in XML.
+    '''
     if not isinstance(xml, ElementTree.Element):
         xml = ElementTree.fromstring(xml)
     for e in list(xml):
@@ -162,7 +219,6 @@ class BoincClient(object):
         if reply.tag == 'authorized':
             return True
         else:
-            print ElementTree.tostring(reply)
             return False
 
     def exchange_versions(self):
@@ -192,6 +248,7 @@ def read_gui_rpc_password():
 
 if __name__ == '__main__':
     with BoincClient() as boinc:
+        print boinc.connected
         print boinc.authorized
         print boinc.version
         print boinc.get_cc_status()
