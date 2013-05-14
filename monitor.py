@@ -115,7 +115,6 @@ class BoincIndicator(object):
                 gtkmenu.append(Gtk.SeparatorMenuItem())
 
         gtkmenu.show_all()
-        self.update_status()
         self.ind.set_menu(gtkmenu)
 
     # TODO:
@@ -142,14 +141,15 @@ class BoincIndicator(object):
         #       to exit app, and KeyboardInterrupt does not work with Gtk.main()
         #       See: https://bugzilla.gnome.org/show_bug.cgi?id=622084
         self.boinc.connect()
+        self.update_status()
         self._timerid = GLib.timeout_add_seconds(self.refresh,
                                                  self.update_status)
         Gtk.main()
 
 
     def quit(self):
-        self.boinc.disconnect()
         Gtk.main_quit()
+        self.boinc.disconnect()
 
 
     def handler_generic(self, src):

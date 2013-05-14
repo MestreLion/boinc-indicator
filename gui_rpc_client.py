@@ -869,7 +869,7 @@ class CcState(object):
 
     #int parse(XML_PARSER&);
     def parse(self, xp):
-        pass
+        return xp.f
 #
 # struct PROJECTS {
 #     std::vector<PROJECT*> projects;
@@ -1517,3 +1517,8 @@ if __name__ == "__main__":
     print "get_cc_status:"
     for item in status.__dict__:
         print '\t%s\t%s' % (item, getattr(status, item))
+
+    state = rpc.get_state()
+    print "get_state:"
+    for line in state:
+        print '\t%s' % line.rstrip()

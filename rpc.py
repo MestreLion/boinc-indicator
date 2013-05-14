@@ -45,8 +45,8 @@ class Rpc(object):
             and (re-)connect to host.
         '''
         if self.sock: self.disconnect()
-        self.sockargs = ((hostname or None, port or GUI_RPC_PORT), timeout)
-        self.sock = socket.create_connection(*self.sockargs)
+        self.sockargs = (hostname or None, port or GUI_RPC_PORT, timeout)
+        self.sock = socket.create_connection(self.sockargs[0:2], self.sockargs[2])
 
     def disconnect(self):
         ''' Disconnect from host. Calling multiple times is OK (idempotent)
@@ -82,9 +82,12 @@ class Rpc(object):
 
         req = ""
         while True:
-            buf = self.sock.recv(8192)
-            if not buf:
-                raise socket.error
+            try:
+                buf = self.sock.recv(8192)
+                if not buf:
+                    raise socket.error("No data from socket")
+            except socket.error:
+                raise
             n = buf.find(end)
             if not n == -1: break
             req += buf

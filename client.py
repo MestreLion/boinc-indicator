@@ -169,7 +169,11 @@ class BoincClient(object):
         return VersionInfo.parse(self.rpc.call('<exchange_versions/>'))
 
     def get_cc_status(self):
-        return CcStatus.parse(self.rpc.call('<get_cc_status/>'))
+        if not self.connected: self.connect()
+        try:
+            return CcStatus.parse(self.rpc.call('<get_cc_status/>'))
+        except socket.error:
+            self.connected = False
 
 
 def read_gui_rpc_password():
