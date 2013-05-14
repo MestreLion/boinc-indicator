@@ -23,6 +23,7 @@
 import sys
 import os.path as osp
 import webbrowser
+import time
 
 from gi.repository import Gtk, GLib, AppIndicator3
 
@@ -164,16 +165,22 @@ class BoincIndicator(object):
 
 
     def handler_suspend_resume(self, src):
-        #TODO: This is mock-up. When API is ready, GUI should do nothing but:
-        #      boinc.set_run_mode(NEVER); self.update_status()
-        #self.suspended = not self.suspended
+        print src.get_active()
+        if src.get_active():
+            self.boinc.set_run_mode(client.RunMode.NEVER, 3600)
+        else:
+            self.boinc.set_run_mode(client.RunMode.ALWAYS)
+        time.sleep(1)
         self.update_status(force=True)
 
 
     def handler_suspend_resume_gpu(self, src):
-        #TODO: This is mock-up. When API is ready, GUI should do nothing but:
-        #      boinc.set_gpu_mode(NEVER); self.update_status()
-        #self.gpu_suspended = not self.gpu_suspended
+        print src.get_active()
+        if src.get_active():
+            self.boinc.set_gpu_mode(client.RunMode.NEVER, 3600)
+        else:
+            self.boinc.set_gpu_mode(client.RunMode.ALWAYS)
+        time.sleep(1)
         self.update_status(force=True)
 
 

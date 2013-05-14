@@ -235,22 +235,41 @@ class BoincClient(object):
         except socket.error:
             self.connected = False
 
-    def set_run_mode(self, mode, duration=0):
-        ''' Set the run mode (RunMode.NEVER/AUTO/ALWAYS/RESTORE)
-            If duration is zero, mode is permanent. Otherwise revert to last
-            permanent mode after duration seconds elapse.
-        '''
+    def _set_mode(self, mode, duration, component):
+        ''' Do the real work of set_{run,gpu,network}_mode() '''
         try:
             reply = ElementTree.fromstring(
-                        self.rpc.call("<set_run_mode>"\
+                        self.rpc.call("<set_%s_mode>"\
                                       "<%s/>"\
                                       "<duration>%f</duration>"\
-                                      "</set_run_mode>"
-                                      % (RunMode.name(mode).lower(),
-                                         duration)))
+                                      "</set_%s_mode>"
+                                      % (component,
+                                         RunMode.name(mode).lower(),
+                                         duration,
+                                         component)))
             return (reply.tag == 'success')
         except socket.error:
             return False
+
+    def set_run_mode(self, mode, duration=0):
+        ''' Set the run mode (RunMode.NEVER/AUTO/ALWAYS/RESTORE)
+            NEVER will suspend all activity, including CPU, GPU and Network
+            AUTO will run according to preferences.
+            If duration is zero, mode is permanent. Otherwise revert to last
+            permanent mode after duration seconds elapse.
+        '''
+        return self._set_mode(mode, duration, 'run')
+
+    def set_gpu_mode(self, mode, duration=0):
+        ''' Set the GPU run mode, similar to set_run_mode() but for GPU only
+        '''
+        return self._set_mode(mode, duration, 'gpu')
+
+    def set_network_mode(self, mode, duration=0):
+        ''' Set the Network run mode, similar to set_run_mode()
+            but for network activity only
+        '''
+        return self._set_mode(mode, duration, 'network')
 
 
 def read_gui_rpc_password():
@@ -268,9 +287,14 @@ def read_gui_rpc_password():
 
 
 if __name__ == '__main__':
+    import time
     with BoincClient() as boinc:
         print boinc.connected
         print boinc.authorized
         print boinc.version
         print boinc.get_cc_status()
-        print boinc.set_run_mode(RunMode.NEVER)
+        print boinc.set_run_mode(RunMode.NEVER, 6)
+        time.sleep(7)
+        print boinc.set_gpu_mode(RunMode.NEVER, 6)
+        time.sleep(7)
+        print boinc.set_network_mode(RunMode.NEVER, 6)
