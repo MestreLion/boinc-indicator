@@ -88,10 +88,13 @@ class BoincIndicator(object):
         self.menu = {}
 
         menu_items = [
-            ['status_version',     ""],
-            [],
             ['website',            _('Open BOINC _Web...')],
             ['manager',            _('Open BOINC _Manager...')],
+            [],
+            ['status_version',     ""],
+            ['status_cpu',         ""],
+            ['status_gpu',         ""],
+            ['status_net',         ""],
             [],
             ['suspend_resume',     _('_Snooze'),     Gtk.CheckMenuItem],
             ['suspend_resume_gpu', _('Snooze _GPU'), Gtk.CheckMenuItem],
@@ -207,25 +210,69 @@ class BoincIndicator(object):
             self.menu['suspend_resume'].set_sensitive(False)
             self.menu['suspend_resume_gpu'].set_sensitive(False)
             self.menu['status_version'].set_label('Not connected')
+            self.menu['status_cpu'].hide()
+            self.menu['status_gpu'].hide()
+            self.menu['status_net'].hide()
             self.ind.set_icon(self.icon_error)
         else:
+            # Set UI for 'connected'
             self.menu['suspend_resume'].set_sensitive(True)
             self.menu['status_version'].set_label(_('BOINC client version: %s'
                                                     % self.boinc.version))
-            if status.task_suspend_reason > 0:
+
+            if (status.task_suspend_reason > 0 and \
+                status.task_suspend_reason != client.SuspendReason.CPU_THROTTLE):
+
+                # Set UI for 'cpu suspended'
                 self.menu['suspend_resume'].set_active(True)
                 self.menu['suspend_resume_gpu'].set_active(False)
                 self.menu['suspend_resume_gpu'].set_sensitive(False)
+                self.menu['status_cpu'].set_label(
+                    '%s%s' % (_("Computing is suspended - "),
+                              client.SuspendReason.name(status.task_suspend_reason)))
+                self.menu['status_gpu'].hide()
+                self.menu['status_net'].hide()
                 self.ind.set_icon(self.icon_pause)
+
             else:
+
+                # Set UI for 'cpu active'
                 self.menu['suspend_resume'].set_active(False)
                 self.menu['suspend_resume_gpu'].set_sensitive(True)
+                self.menu['status_cpu'].set_label(_("Computing is enabled"))
+
                 if status.gpu_suspend_reason > 0:
+                    # Set UI for 'gpu suspended'
                     self.menu['suspend_resume_gpu'].set_active(True)
+                    self.menu['status_gpu'].set_label(
+                        '%s%s' % (_("GPU computing is suspended - "),
+                                  client.SuspendReason.name(status.gpu_suspend_reason)))
                     self.ind.set_icon(self.icon_pause_gpu)
+
                 else:
+
+                    # TODO: Must test if there *IS* a GPU (CcState.have_gpu())
+                    # Set UI for 'gpu active'
                     self.menu['suspend_resume_gpu'].set_active(False)
+                    self.menu['status_gpu'].set_label(_("GPU computing is enabled"))
                     self.ind.set_icon(self.icon_normal)
+
+                if status.network_suspend_reason > 0:
+                    # Set UI for 'net suspended'
+                    self.menu['status_net'].set_label(
+                        '%s%s' % (_("Network is suspended - "),
+                                  client.SuspendReason.name(status.network_suspend_reason)))
+                else:
+                    # Set UI for 'net active'
+                    self.menu['status_net'].set_label(_("Network is enabled"))
+
+                # (re-)show menus for 'cpu active'
+                self.menu['status_gpu'].show()
+                self.menu['status_net'].show()
+
+            # (re-)show menus for 'connected' as last action,
+            # to avoid any visual glitches
+            self.menu['status_cpu'].show()
 
         return True  # returning False would deactivate update timer
 
