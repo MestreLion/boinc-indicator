@@ -68,7 +68,7 @@ class SuspendReason(Enum):
     BATTERY_OVERHEATED     = 4099
 
 
-class RunMode(object):
+class RunMode(Enum):
     ''' Run modes for CPU, GPU, network,
         controlled by Activity menu and snooze button
     '''
@@ -222,14 +222,35 @@ class BoincClient(object):
             return False
 
     def exchange_versions(self):
+        ''' Return VersionInfo instance with core client version info '''
         return VersionInfo.parse(self.rpc.call('<exchange_versions/>'))
 
     def get_cc_status(self):
+        ''' Return CcStatus instance containing basic status, such as
+            CPU / GPU / Network active/suspended, etc
+        '''
         if not self.connected: self.connect()
         try:
             return CcStatus.parse(self.rpc.call('<get_cc_status/>'))
         except socket.error:
             self.connected = False
+
+    def set_run_mode(self, mode, duration=0):
+        ''' Set the run mode (RunMode.NEVER/AUTO/ALWAYS/RESTORE)
+            If duration is zero, mode is permanent. Otherwise revert to last
+            permanent mode after duration seconds elapse.
+        '''
+        try:
+            reply = ElementTree.fromstring(
+                        self.rpc.call("<set_run_mode>"\
+                                      "<%s/>"\
+                                      "<duration>%f</duration>"\
+                                      "</set_run_mode>"
+                                      % (RunMode.name(mode).lower(),
+                                         duration)))
+            return (reply.tag == 'success')
+        except socket.error:
+            return False
 
 
 def read_gui_rpc_password():
@@ -252,3 +273,4 @@ if __name__ == '__main__':
         print boinc.authorized
         print boinc.version
         print boinc.get_cc_status()
+        print boinc.set_run_mode(RunMode.NEVER)
