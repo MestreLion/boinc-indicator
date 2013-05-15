@@ -50,6 +50,7 @@ class SuspendReason(Enum):
     ''' bitmap defs for task_suspend_reason, network_suspend_reason
         Note: doesn't need to be a bitmap, but keep for compatibility
     '''
+    NOT_SUSPENDED          =    0  # Not in original API
     BATTERIES              =    1
     USER_ACTIVE            =    2
     USER_REQ               =    4
