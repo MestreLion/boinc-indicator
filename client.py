@@ -235,8 +235,13 @@ class BoincClient(object):
         except socket.error:
             self.connected = False
 
-    def _set_mode(self, mode, duration, component):
-        ''' Do the real work of set_{run,gpu,network}_mode() '''
+    def set_mode(self, component, mode, duration=0):
+        ''' Do the real work of set_{run,gpu,network}_mode()
+            This method is not part of the original API.
+            Valid components are 'run' (or 'cpu'), 'gpu', 'network' (or 'net')
+        '''
+        component = component.replace('cpu','run')
+        component = component.replace('net','network')
         try:
             reply = ElementTree.fromstring(
                         self.rpc.call("<set_%s_mode>"\
@@ -258,7 +263,7 @@ class BoincClient(object):
             If duration is zero, mode is permanent. Otherwise revert to last
             permanent mode after duration seconds elapse.
         '''
-        return self._set_mode(mode, duration, 'run')
+        return self._set_mode(mode, duration, 'cpu')
 
     def set_gpu_mode(self, mode, duration=0):
         ''' Set the GPU run mode, similar to set_run_mode() but for GPU only
@@ -269,7 +274,7 @@ class BoincClient(object):
         ''' Set the Network run mode, similar to set_run_mode()
             but for network activity only
         '''
-        return self._set_mode(mode, duration, 'network')
+        return self._set_mode(mode, duration, 'net')
 
 
 def read_gui_rpc_password():
