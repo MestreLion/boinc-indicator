@@ -42,8 +42,6 @@ __appname__ = _('BOINC Monitor')
 __appdesc__ = _('App Indicator for monitoring and managing BOINC')
 __author__  = 'Rodrigo Silva'
 __url__     = 'http://github.com/MestreLion/boinc-indicator'
-__date__    = '2013-05-08'
-__updated__ = '2013-05-08'
 
 
 
@@ -52,8 +50,7 @@ class BoincIndicator(object):
     def __init__(self, theme_path="", refresh=3):
         self.theme_path = osp.abspath(theme_path or
                                       osp.join(osp.dirname(__file__),"images"))
-        self._refresh = refresh
-        self._timerid = 0
+        self.refresh = refresh
 
         self.icon           = __apptag__ + '-icon'
         self.icon_normal    = __apptag__ + '-normal'
@@ -63,15 +60,6 @@ class BoincIndicator(object):
 
         self.logo = GdkPixbuf.Pixbuf.new_from_file(osp.join(self.theme_path,
                                                             'boinc-logo.png'))
-
-        self.task_run     = 'task_green.png'
-        self.task_wait    = 'task_yellow.png'
-        self.task_suspend = 'task_red'
-
-        self.label_prefix = _('Boinc')
-        self.label_normal = _('running')
-        self.label_pause  = _('suspended')
-        self.label_error  = _('disconnected')
 
         self.boinc = client.BoincClient()
 
@@ -120,23 +108,6 @@ class BoincIndicator(object):
         gtkmenu.show_all()
         self.ind.set_menu(gtkmenu)
 
-    # TODO:
-    # refresh rate control is premature over-engineering that will likely
-    # be removed after first commit, and only come back in distant future.
-    @property
-    def refresh(self):
-        return self._refresh
-
-    @refresh.setter
-    def refresh(self, value):
-        if self._timerid and not value == self._refresh:
-            GLib.source_remove(self._timerid)
-
-        if value:
-            self.update_status()
-            self._timerid = GLib.timeout_add_seconds(self.refresh,
-                                                     self.update_status)
-
 
     def main(self):
         #FIXME: make damn sure Indicator have found icons and it's working
@@ -145,8 +116,7 @@ class BoincIndicator(object):
         #       See: https://bugzilla.gnome.org/show_bug.cgi?id=622084
         self.boinc.connect()
         self.update_status()
-        self._timerid = GLib.timeout_add_seconds(self.refresh,
-                                                 self.update_status)
+        GLib.timeout_add_seconds(self.refresh, self.update_status)
         Gtk.main()
 
 
@@ -324,5 +294,7 @@ class BoincIndicator(object):
 if __name__ == "__main__":
     GLib.set_application_name(__appname__)
     GLib.set_prgname(__apptag__)
+    #TODO: add command-line arguments (via argparse), specially --refresh
+    # Which could move from __init__() to main()
     ind = BoincIndicator()
     sys.exit(ind.main())
