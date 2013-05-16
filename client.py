@@ -279,6 +279,14 @@ class BoincClient(object):
         return self.rpc.call('<run_benchmarks/>').tag == "success"
 
 
+    def quit(self):
+        ''' Tell the core client to exit '''
+        if self.rpc.call('<quit/>').tag == "success":
+            self.connected = False
+            return True
+        return False
+
+
 def read_gui_rpc_password():
     ''' Read password string from GUI_RPC_PASSWD_FILE file, trim the last CR
         (if any), and return it

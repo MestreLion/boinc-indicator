@@ -23,6 +23,7 @@
 import sys
 import os.path as osp
 import webbrowser
+import os, subprocess
 
 from gi.repository import Gtk, GLib, GdkPixbuf, AppIndicator3
 
@@ -87,6 +88,9 @@ class BoincIndicator(object):
             ['suspend_resume_cpu', _('_Snooze'),     Gtk.CheckMenuItem],
             ['suspend_resume_gpu', _('Snooze _GPU'), Gtk.CheckMenuItem],
             [],
+            ['client_restart',     _('_Restart BOINC core client')],
+            ['client_stop',        _('Shutdown BOINC core client')],
+            [],
             ['about',              _('_About %s...' % __appname__)],
             [],
             ['quit',               _('_Quit')],
@@ -147,6 +151,21 @@ class BoincIndicator(object):
 
     def handler_suspend_resume_gpu(self, src):
         self.suspend_resume(src, 'gpu')
+
+
+    def handler_client_restart(self, src):
+        try:
+            subprocess.check_output(['pkexec','service','boinc-client','restart'],
+                                    stderr=subprocess.STDOUT)
+        except Exception as e:
+            print e
+
+
+    def handler_client_stop(self, src):
+        # TODO: open a BIG alert telling user that after a shutdown, admin
+        # privileges will be required to restart. Ask to confirm
+        if self.boinc.quit():
+            self.update_status()
 
 
     def handler_about(self, src):
