@@ -212,10 +212,9 @@ class BoincClient(object):
         '''
         if password is None and not self.hostname:
             password = read_gui_rpc_password() or ""
-        nonce = ElementTree.fromstring(self.rpc.call('<auth1/>')).text
+        nonce = self.rpc.call('<auth1/>').text
         hash = hashlib.md5('%s%s' % (nonce, password)).hexdigest().lower()
-        reply = ElementTree.fromstring(
-            self.rpc.call('<auth2><nonce_hash>%s</nonce_hash></auth2>' % hash))
+        reply = self.rpc.call('<auth2><nonce_hash>%s</nonce_hash></auth2>' % hash)
 
         if reply.tag == 'authorized':
             return True
@@ -244,15 +243,12 @@ class BoincClient(object):
         component = component.replace('cpu','run')
         component = component.replace('net','network')
         try:
-            reply = ElementTree.fromstring(
-                        self.rpc.call("<set_%s_mode>"\
-                                      "<%s/>"\
-                                      "<duration>%f</duration>"\
-                                      "</set_%s_mode>"
-                                      % (component,
-                                         RunMode.name(mode).lower(),
-                                         duration,
-                                         component)))
+            reply = self.rpc.call("<set_%s_mode>"
+                                  "<%s/><duration>%f</duration>"
+                                  "</set_%s_mode>"
+                                  % (component,
+                                     RunMode.name(mode).lower(), duration,
+                                     component))
             return (reply.tag == 'success')
         except socket.error:
             return False

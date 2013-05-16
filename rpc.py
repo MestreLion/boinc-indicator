@@ -55,19 +55,17 @@ class Rpc(object):
             self.sock.close()
             self.sock = None
 
-    def call(self, request):
+    def call(self, request, text_output=False):
         ''' Do an RPC call. Pack and send the XML request and return the
             unpacked reply. request can be either plain XML text or a
-            xml.etree.ElementTree.Element object. Return type matches request.
+            xml.etree.ElementTree.Element object. Return ElementTree.Element
+            or XML text according to text_output flag.
             Will auto-connect if not connected.
         '''
         if not self.sock:
             self.connect(*self.sockargs)
 
-        if isinstance(request, ElementTree.Element):
-            textmode = False
-        else:
-            textmode = True
+        if not isinstance(request, ElementTree.Element):
             request = ElementTree.fromstring(request)
 
         # pack request
@@ -96,7 +94,7 @@ class Rpc(object):
         # unpack reply (remove root tag, ie: first and last lines)
         req = '\n'.join(req.strip().rsplit('\n')[1:-1])
 
-        if textmode:
+        if text_output:
             return req
         else:
             return ElementTree.fromstring(req)
