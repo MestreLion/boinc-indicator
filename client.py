@@ -264,18 +264,18 @@ class BoincClient(object):
             If duration is zero, mode is permanent. Otherwise revert to last
             permanent mode after duration seconds elapse.
         '''
-        return self._set_mode(mode, duration, 'cpu')
+        return self.set_mode('cpu', mode, duration)
 
     def set_gpu_mode(self, mode, duration=0):
         ''' Set the GPU run mode, similar to set_run_mode() but for GPU only
         '''
-        return self._set_mode(mode, duration, 'gpu')
+        return self.set_mode('gpu', mode, duration)
 
     def set_network_mode(self, mode, duration=0):
         ''' Set the Network run mode, similar to set_run_mode()
             but for network activity only
         '''
-        return self._set_mode(mode, duration, 'net')
+        return self.set_mode('net', mode, duration)
 
 
 def read_gui_rpc_password():
