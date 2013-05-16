@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# install - installer for boinc-monitor
+#
+#    Copyright (C) 2013 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/gpl>.
+
+# Quick-and-dirty install/uninstall script until I properly package it
+
+mydir=$(dirname "$(readlink -f "$0")")
+
+icon=$mydir/images/boinc-monitor-icon.png
+deskin=$mydir/boinc-monitor.desktop.in
+
+uninstall=0
+
+usage(){ echo "Usage: [sudo] install [--uninstall]"; exit ${1:-0}; }
+for arg in "$@"; do case "$arg" in
+	-h|--help) usage;;
+	--uninstall) uninstall=1;;
+	*) echo "invalid argument: $arg" >&2; usage 1;;
+esac; done
+
+datadir=${XDG_DATA_HOME:-"$HOME"/.local/share}
+configdir=${XDG_CONFIG_HOME:-"$HOME"/.config}
+
+deskdir=$datadir/applications
+deskfile=$deskdir/$(basename "${deskin%.*}")
+autodir=$configdir/autostart
+
+if ((uninstall)); then
+	echo "Uninstalling"
+	rm -f "$deskfile" "$autodir"/"${deskfile##*/}"
+	xdg-icon-resource uninstall --size $(identify -format '%w' "$icon") \
+		"$(basename "${icon%.*}")"
+	echo "Done"
+	exit
+fi
+
+mkdir -p "$deskdir" "$autodir"
+
+awk -v mydir="$(printf '%q' "$mydir")" \
+	'{sub("%PATH%", mydir "/")}1' \
+	"$deskin" > "$deskfile"
+
+cp "$deskfile" "$autodir"
+
+xdg-icon-resource install --novendor --size $(identify -format '%w' "$icon") "$icon"
+
+echo "Done"

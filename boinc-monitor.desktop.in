@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=BOINC Monitor
+Name[pt]=Monitor do BOINC
+GenericName=BOINC status panel AppIndicator
+GenericName[pt]=AppIndicator de painel para status do BOINC
+Comment=Monitor BOINC client status from panel
+Comment[pt]=Monitore o status do BOINC através do painel
+Categories=Science;Education;Monitor;System;GTK;
+Terminal=false
+StartupNotify=true
+Icon=boinc-monitor-icon
+Exec=%PATH%boinc-monitor
