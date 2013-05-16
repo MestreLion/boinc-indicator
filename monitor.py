@@ -24,7 +24,7 @@ import sys
 import os.path as osp
 import webbrowser
 
-from gi.repository import Gtk, GLib, AppIndicator3
+from gi.repository import Gtk, GLib, GdkPixbuf, AppIndicator3
 
 import client
 
@@ -55,11 +55,14 @@ class BoincIndicator(object):
         self._refresh = refresh
         self._timerid = 0
 
-        self.icon           = __apptag__
+        self.icon           = __apptag__ + '-icon'
         self.icon_normal    = __apptag__ + '-normal'
         self.icon_error     = __apptag__ + '-error'
         self.icon_pause_cpu = __apptag__ + '-pause'
         self.icon_pause_gpu = __apptag__ + '-pause-gpu'
+
+        self.logo = GdkPixbuf.Pixbuf.new_from_file(osp.join(self.theme_path,
+                                                            'boinc-logo.png'))
 
         self.task_run     = 'task_green.png'
         self.task_wait    = 'task_yellow.png'
@@ -177,11 +180,12 @@ class BoincIndicator(object):
 
 
     def handler_about(self, src):
-        #TODO: prevent opening multiple times, fix icon, fix launcher, disable minimize
+        #TODO: prevent opening multiple times, disable minimize
         about = Gtk.AboutDialog()
         about.set_name(__appname__)
         about.set_version(str(__version__))
-        about.set_logo_icon_name('boincmgr')
+        about.set_logo(self.logo)
+        about.set_icon_name(self.icon)
         about.set_comments(__appdesc__)
         about.set_website(__url__)
         about.set_website_label(_('%s Website' % __appname__))
