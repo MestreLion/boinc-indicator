@@ -104,3 +104,4 @@ if __name__ == '__main__':
     with Rpc() as rpc:
         print rpc.call('<exchange_versions/>')
         print rpc.call('<get_cc_status/>')
+        print rpc.call('<run_benchmarks/>')

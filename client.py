@@ -274,6 +274,11 @@ class BoincClient(object):
         return self.set_mode('net', mode, duration)
 
 
+    def run_benchmarks(self):
+        ''' Run benchmarks. Computing will suspend during benchmarks '''
+        return self.rpc.call('<run_benchmarks/>').tag == "success"
+
+
 def read_gui_rpc_password():
     ''' Read password string from GUI_RPC_PASSWD_FILE file, trim the last CR
         (if any), and return it
@@ -294,6 +299,7 @@ if __name__ == '__main__':
         print boinc.connected
         print boinc.authorized
         print boinc.version
+        print boinc.run_benchmarks()
         print boinc.get_cc_status()
         print boinc.set_run_mode(RunMode.NEVER, 6)
         time.sleep(7)
