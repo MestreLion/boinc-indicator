@@ -23,7 +23,9 @@
 import socket
 from xml.etree import ElementTree
 
+GUI_RPC_HOSTNAME    = None  # localhost
 GUI_RPC_PORT        = 31416
+GUI_RPC_TIMEOUT     = 30
 
 class Rpc(object):
     ''' Class to perform GUI RPC calls to a BOINC core client.
@@ -31,22 +33,33 @@ class Rpc(object):
         disconnect() is called. Using the same instance for all calls is also
         recommended so it reuses the same socket connection
         '''
-    def __init__(self, text_output=False):
-        self.sockargs = ()
+    def __init__(self, hostname="", port=0, timeout=0, text_output=False):
+        self.hostname = hostname
+        self.port     = port
+        self.timeout  = timeout
         self.sock = None
         self.text_output = text_output
 
-    def __enter__(self, *args): self.connect(*args); return self
+    @property
+    def sockargs(self):
+        return (self.hostname, self.port, self.timeout)
+
+    def __enter__(self): self.connect(*self.sockargs); return self
     def __exit__(self, *args): self.disconnect()
 
-    def connect(self, hostname="", port=0, timeout=5):
-        ''' Connect to (host, port) with timeout in seconds.
-            Host defaults to None (localhost), and port to GUI_RPC_PORT (31416)
+    def connect(self, hostname="", port=0, timeout=0):
+        ''' Connect to (hostname, port) with timeout in seconds.
+            Hostname defaults to None (localhost), and port to 31416
             Calling multiple times will disconnect previous connection (if any),
             and (re-)connect to host.
         '''
-        if self.sock: self.disconnect()
-        self.sockargs = (hostname or None, port or GUI_RPC_PORT, timeout)
+        if self.sock:
+            self.disconnect()
+
+        self.hostname = hostname or GUI_RPC_HOSTNAME
+        self.port     = port     or GUI_RPC_PORT
+        self.timeout  = timeout  or GUI_RPC_TIMEOUT
+
         self.sock = socket.create_connection(self.sockargs[0:2], self.sockargs[2])
 
     def disconnect(self):
