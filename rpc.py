@@ -31,9 +31,10 @@ class Rpc(object):
         disconnect() is called. Using the same instance for all calls is also
         recommended so it reuses the same socket connection
         '''
-    def __init__(self):
+    def __init__(self, text_output=False):
         self.sockargs = ()
         self.sock = None
+        self.text_output = text_output
 
     def __enter__(self, *args): self.connect(*args); return self
     def __exit__(self, *args): self.disconnect()
@@ -55,13 +56,16 @@ class Rpc(object):
             self.sock.close()
             self.sock = None
 
-    def call(self, request, text_output=False):
+    def call(self, request, text_output=None):
         ''' Do an RPC call. Pack and send the XML request and return the
             unpacked reply. request can be either plain XML text or a
             xml.etree.ElementTree.Element object. Return ElementTree.Element
             or XML text according to text_output flag.
             Will auto-connect if not connected.
         '''
+        if text_output is None:
+            text_output = self.text_output
+
         if not self.sock:
             self.connect(*self.sockargs)
 
@@ -101,7 +105,7 @@ class Rpc(object):
 
 
 if __name__ == '__main__':
-    with Rpc() as rpc:
+    with Rpc(text_output=True) as rpc:
         print rpc.call('<exchange_versions/>')
         print rpc.call('<get_cc_status/>')
         print rpc.call('<run_benchmarks/>')
