@@ -154,8 +154,10 @@ class BoincIndicator(object):
 
 
     def handler_client_restart(self, src):
+        #TODO: Use 'pkexec' instead of 'gksudo' for wider compatibility.
+        #      Must also install a polkit action xml file to allow GUI so it finds GPU
         try:
-            subprocess.check_output(['pkexec','service','boinc-client','restart'],
+            subprocess.check_output(['gksudo', '/etc/init.d/boinc-client', 'restart'],
                                     stderr=subprocess.STDOUT)
         except Exception as e:
             print e
