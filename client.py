@@ -246,6 +246,83 @@ class CcStatus(object):
         return buf
 
 
+class Result(object):
+    def __init__(self):
+        self.name                         = ""
+        self.wu_name                      = ""
+        self.version_num                  = 0
+        self.plan_class                   = ""
+        self.project_url                  = ""
+        self.report_deadline              = 0.0    # seconds since epoch
+        self.received_time                = 0.0    # seconds since epoch
+        self.ready_to_report              = False
+        self.got_server_ack               = False
+        self.final_cpu_time               = 0.0
+        self.final_elapsed_time           = 0.0
+        self.state                        = 0
+        self.scheduler_state              = 0
+        self.exit_status                  = 0
+        self.signal                       = 0
+        self.suspended_via_gui            = False
+        self.project_suspended_via_gui    = False
+        self.coproc_missing               = False
+        self.scheduler_wait               = False
+        self.scheduler_wait_reason        = ""
+        self.network_wait                 = False
+
+        #// the following defined if active
+        self.active_task                  = False
+        self.active_task_state            = 0
+        self.app_version_num              = 0
+        self.slot                         = -1
+        self.pid                          = 0
+        self.checkpoint_cpu_time          = 0.0
+        self.current_cpu_time             = 0.0
+        self.fraction_done                = 0.0
+        self.elapsed_time                 = 0.0
+        self.swap_size                    = 0.0
+        self.working_set_size_smoothed    = 0.0
+        self.estimated_cpu_time_remaining = 0.0    #// actually, estimated elapsed time remaining
+        self.too_large                    = False
+        self.needs_shmem                  = False
+        self.edf_scheduled                = False
+
+        self.graphics_exec_path           = ""
+        self.web_graphics_url             = ""
+        self.remote_desktop_addr          = ""
+        self.slot_path                    = ""    #// only present if graphics_exec_path is
+        self.resources                    = ""
+
+        self.app                          = None  # APP*
+        self.wup                          = None  # WORKUNIT*
+        self.project                      = None  # PROJECT*
+        self.avp                          = None  # APP_VERSION*
+
+    @classmethod
+    def parse(cls, xml):
+        if not isinstance(xml, ElementTree.Element):
+            xml = ElementTree.fromstring(xml)
+
+        # parse main XML
+        result = setattrs_from_xml(cls(), xml)
+
+        # parse '<active_task>' children
+        active_task = xml.find('active_task')
+        if active_task is None:
+            result.active_task = False  # already the default after __init__()
+        else:
+            result.active_task = True   # already the default after main parse
+            result = setattrs_from_xml(result, active_task)
+
+        return result
+
+    def __str__(self):
+        buf = '%s:\n' % self.__class__.__name__
+        for attr in self.__dict__:
+            buf += '\t%s\t%r\n' % (attr, getattr(self, attr))
+        return buf
+
+
 class BoincClient(object):
 
     def __init__(self, host="", passwd=None):
@@ -314,6 +391,29 @@ class BoincClient(object):
         except socket.error:
             self.connected = False
 
+    def get_tasks(self):
+        ''' Same as get_results(active_only=False) '''
+        return self.get_results(False)
+
+    def get_results(self, active_only=False):
+        ''' Get a list of results.
+            Those that are in progress will have information such as CPU time
+            and fraction done. Each result includes a name;
+            Use CC_STATE::lookup_result() to find this result in the current static state;
+            if it's not there, call get_state() again.
+        '''
+        reply = self.rpc.call("<get_results><active_only>%d</active_only></get_results>"
+                               % (1 if active_only else 0))
+        if not reply.tag == 'results':
+            return []
+
+        results = []
+        for item in list(reply):
+            results.append(Result.parse(item))
+
+        return results
+
+
     def set_mode(self, component, mode, duration=0):
         ''' Do the real work of set_{run,gpu,network}_mode()
             This method is not part of the original API.
@@ -352,11 +452,9 @@ class BoincClient(object):
         '''
         return self.set_mode('net', mode, duration)
 
-
     def run_benchmarks(self):
         ''' Run benchmarks. Computing will suspend during benchmarks '''
         return self.rpc.call('<run_benchmarks/>').tag == "success"
-
 
     def quit(self):
         ''' Tell the core client to exit '''
@@ -386,8 +484,10 @@ if __name__ == '__main__':
         print boinc.connected
         print boinc.authorized
         print boinc.version
-        print boinc.run_benchmarks()
         print boinc.get_cc_status()
+        for i, task in enumerate(boinc.get_tasks()):
+            print i+1, task
+        print boinc.run_benchmarks()
         print boinc.set_run_mode(RunMode.NEVER, 6)
         time.sleep(7)
         print boinc.set_gpu_mode(RunMode.NEVER, 6)
