@@ -23,7 +23,7 @@
 import sys
 import os.path as osp
 import webbrowser
-import os, subprocess
+import subprocess
 
 from gi.repository import Gtk, GLib, GdkPixbuf, AppIndicator3
 
@@ -154,13 +154,7 @@ class BoincIndicator(object):
 
 
     def handler_client_restart(self, src):
-        #TODO: Use 'pkexec' instead of 'gksudo' for wider compatibility.
-        #      Must also install a polkit action xml file to allow GUI so it finds GPU
-        try:
-            subprocess.check_output(['gksudo', '/etc/init.d/boinc-client', 'restart'],
-                                    stderr=subprocess.STDOUT)
-        except Exception as e:
-            print e
+        subprocess.call(['pkexec', '/etc/init.d/boinc-client', 'restart'])
 
 
     def handler_client_stop(self, src):

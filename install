@@ -26,7 +26,7 @@ deskin=$mydir/boinc-monitor.desktop.in
 
 uninstall=0
 
-usage(){ echo "Usage: [sudo] install [--uninstall]"; exit ${1:-0}; }
+usage(){ echo "Usage: install [--uninstall]"; exit ${1:-0}; }
 for arg in "$@"; do case "$arg" in
 	-h|--help) usage;;
 	--uninstall) uninstall=1;;
@@ -45,6 +45,8 @@ if ((uninstall)); then
 	rm -f "$deskfile" "$autodir"/"${deskfile##*/}"
 	xdg-icon-resource uninstall --size $(identify -format '%w' "$icon") \
 		"$(basename "${icon%.*}")"
+	echo "Need root to uninstall polkit action file"
+	sudo rm -f /usr/share/polkit-1/actions/*boinc*.policy
 	echo "Done"
 	exit
 fi
@@ -58,5 +60,8 @@ awk -v mydir="$(printf '%q' "$mydir")" \
 cp "$deskfile" "$autodir"
 
 xdg-icon-resource install --novendor --size $(identify -format '%w' "$icon") "$icon"
+
+echo "Need root to install polkit action file. Optional, but allows re-starting client from GUI"
+sudo ln -s "$mydir"/*.policy /usr/share/polkit-1/actions
 
 echo "Done"

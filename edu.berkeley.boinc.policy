@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+
+  <vendor>Berkeley Open Infrastructure for Network Computing (BOINC)</vendor>
+  <vendor_url>http://boinc.berkeley.edu/</vendor_url>
+  <!--
+  <icon_name>boincmgr</icon_name>
+  Icon is commented out because it is provided only by boinc-manager package,
+  while this policy file belongs preferably to boinc-client, which does not
+  provide any icon. Not needed if '<allow_active>yes'
+  -->
+
+  <action id="edu.berkeley.boinc.client.restart">
+    <description gettext-domain="BOINC-Client">Restart the BOINC core client</description>
+    <description xml:lang="pt">Reiniciar o cliente básico do BOINC</description>
+    <message gettext-domain="BOINC-Client">Authentication is required to restart the BOINC core client</message>
+    <message xml:lang="pt">Autenticação é necessária para reiniciar o cliente básico do BOINC</message>
+    <!--
+    For translations, it should be used either the 'gettext-domain=' or the
+    'xml:lang=' approach, but not both. Not needed if '<allow_active>yes'
+    -->
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>yes</allow_active>
+      <!--
+      changing 'yes' for 'auth_admin' or 'auth_admin_keep' would be a more
+      restrictive and perhaps preferable approach, but it would not allow
+      automatic client restarts, such as the one planned after X login which
+      could fix the "AMD GPU not found" issue
+      -->
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/etc/init.d/boinc-client</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">restart</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>
