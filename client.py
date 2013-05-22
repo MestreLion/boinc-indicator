@@ -29,6 +29,58 @@ from xml.etree import ElementTree
 
 GUI_RPC_PASSWD_FILE = "/etc/boinc-client/gui_rpc_auth.cfg"
 
+
+def setattrs_from_xml(obj, xml, attrfuncdict={}):
+    ''' Helper to set values for attributes of a class instance by mapping
+        matching tags from a XML file.
+        attrfuncdict is a dict of functions to customize value data type of
+        each attribute. It falls back to simple int/float/bool/str detection
+        based on values defined in __init__(). This would not be needed if
+        Boinc used standard RPC protocol, which includes data type in XML.
+    '''
+    if not isinstance(xml, ElementTree.Element):
+        xml = ElementTree.fromstring(xml)
+    for e in list(xml):
+        if hasattr(obj, e.tag):
+            attr = getattr(obj, e.tag)
+            attrfunc = attrfuncdict.get(e.tag, None)
+            if attrfunc is None:
+                if   isinstance(attr, bool):  attrfunc = parse_bool
+                elif isinstance(attr, int):   attrfunc = parse_int
+                elif isinstance(attr, float): attrfunc = parse_float
+                else:                         attrfunc = parse_str
+            setattr(obj, e.tag, attrfunc(e))
+    return obj
+
+
+def parse_bool(e):
+    ''' Helper to convert ElementTree.Element.text to boolean.
+        Treat '<foo/>' (and '<foo>[[:blank:]]</foo>') as True
+        Treat '0' and 'false' as False
+    '''
+    if e.text is None:
+        return True
+    else:
+        return bool(e.text) and not e.text.strip().lower() in ('0', 'false')
+
+
+def parse_int(e):
+    ''' Helper to convert ElementTree.Element.text to integer.
+        Treat '<foo/>' (and '<foo></foo>') as 0
+    '''
+    return 0 if e.text is None else int(e.text.strip())
+
+
+def parse_float(e):
+    ''' Helper to convert ElementTree.Element.text to float. '''
+    return 0.0 if e.text is None else float(e.text.strip())
+
+
+def parse_str(e):
+    ''' Helper to convert ElementTree.Element.text to string. '''
+    return "" if e.text is None else e.text.strip()
+
+
 class Enum(object):
     @classmethod
     def name(cls, value):
@@ -78,29 +130,6 @@ class RunMode(Enum):
     NEVER                  =    3
     RESTORE                =    4
         # restore permanent mode - used only in set_X_mode() GUI RPC
-
-
-def setattrs_from_xml(obj, xml, attrfuncdict={}):
-    ''' Helper to set values for attributes of a class instance by mapping
-        matching tags from a XML file.
-        attrfuncdict is a dict of functions to customize value data type of
-        each attribute. It falls back to simple int/float/bool/str detection
-        based on values defined in __init__(). This would not be needed if
-        Boinc used standard RPC protocol, which includes data type in XML.
-    '''
-    if not isinstance(xml, ElementTree.Element):
-        xml = ElementTree.fromstring(xml)
-    for e in list(xml):
-        if hasattr(obj, e.tag):
-            attr = getattr(obj, e.tag)
-            attrfunc = attrfuncdict.get(e.tag, None)
-            if not attrfunc:
-                if   isinstance(attr, int):   attrfunc = int
-                elif isinstance(attr, float): attrfunc = float
-                elif isinstance(attr, bool):  attrfunc = bool
-                else:                         attrfunc = str
-            setattr(obj, e.tag, attrfunc(e.text))
-    return obj
 
 
 @total_ordering
