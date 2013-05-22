@@ -82,20 +82,41 @@ def parse_str(e):
 
 
 class Enum(object):
+    UNKNOWN                =   -1  # Not in original API
+
     @classmethod
     def name(cls, value):
-        ''' Quick-and-dirty way of getting the "name" of an enum item '''
+        ''' Quick-and-dirty fallback for getting the "name" of an enum item '''
+
+        # value as string, if it matches an enum attribute.
+        # Allows short usage as Enum.name("VALUE") besides Enum.name(Enum.VALUE)
+        if hasattr(cls, str(value)):
+            return cls.name(getattr(cls, value, None))
+
+        # value not handled in subclass name()
         for k, v in cls.__dict__.items():
             if v == value:
-                return k.lower().replace('_', ' ').capitalize()
+                return k.lower().replace('_', ' ')
+
+        # value not found
+        return cls.name(Enum.UNKNOWN)
 
 
 class NetworkStatus(Enum):
     ''' Values of "network_status" '''
-    ONLINE                 =    0
-    WANT_CONNECTION        =    1
-    WANT_DISCONNECT        =    2
-    LOOKUP_PENDING         =    3
+    ONLINE                 =    0  #// have network connections open
+    WANT_CONNECTION        =    1  #// need a physical connection
+    WANT_DISCONNECT        =    2  #// don't have any connections, and don't need any
+    LOOKUP_PENDING         =    3  #// a website lookup is pending (try again later)
+
+    @classmethod
+    def name(cls, v):
+        if   v == cls.UNKNOWN:         return "unknown"
+        elif v == cls.ONLINE:          return "online"  # misleading
+        elif v == cls.WANT_CONNECTION: return "need connection"
+        elif v == cls.WANT_DISCONNECT: return "don't need connection"
+        elif v == cls.LOOKUP_PENDING:  return "reference site lookup pending"
+        else: return super(NetworkStatus, cls).name(v)
 
 
 class SuspendReason(Enum):
@@ -120,6 +141,26 @@ class SuspendReason(Enum):
     BATTERY_CHARGING       = 4098
     BATTERY_OVERHEATED     = 4099
 
+    @classmethod
+    def name(cls, v):
+        if   v == cls.UNKNOWN:                return "unknown reason"
+        elif v == cls.BATTERIES:              return "on batteries"
+        elif v == cls.USER_ACTIVE:            return "computer is in use"
+        elif v == cls.USER_REQ:               return "user request"
+        elif v == cls.TIME_OF_DAY:            return "time of day"
+        elif v == cls.BENCHMARKS:             return "CPU benchmarks in progress"
+        elif v == cls.DISK_SIZE:              return "need disk space - check preferences"
+        elif v == cls.NO_RECENT_INPUT:        return "no recent user activity"
+        elif v == cls.INITIAL_DELAY:          return "initial delay"
+        elif v == cls.EXCLUSIVE_APP_RUNNING:  return "an exclusive app is running"
+        elif v == cls.CPU_USAGE:              return "CPU is busy"
+        elif v == cls.NETWORK_QUOTA_EXCEEDED: return "network bandwidth limit exceeded"
+        elif v == cls.OS:                     return "requested by operating system"
+        elif v == cls.WIFI_STATE:             return "not connected to WiFi network"
+        elif v == cls.BATTERY_CHARGING:       return "battery is recharging"
+        elif v == cls.BATTERY_OVERHEATED:     return "battery is overheated"
+        else: return super(SuspendReason, cls).name(v)
+
 
 class RunMode(Enum):
     ''' Run modes for CPU, GPU, network,
@@ -128,8 +169,13 @@ class RunMode(Enum):
     ALWAYS                 =    1
     AUTO                   =    2
     NEVER                  =    3
-    RESTORE                =    4
-        # restore permanent mode - used only in set_X_mode() GUI RPC
+    RESTORE                =    4  #// restore permanent mode - used only in set_X_mode() GUI RPC
+
+    @classmethod
+    def name(cls, v):
+        # all other modes use the fallback name
+        if v == cls.AUTO: return "according to prefs"
+        else: return super(RunMode, cls).name(v)
 
 
 @total_ordering
@@ -167,21 +213,25 @@ class VersionInfo(object):
 
 class CcStatus(object):
     def __init__(self):
-        self.network_status         = -1    #// values: NETWORK_STATUS_*
+        self.network_status         = NetworkStatus.UNKNOWN
         self.ams_password_error     = False
         self.manager_must_quit      = False
-        self.task_suspend_reason    = -1    #// bitmap, see common_defs.h
-        self.task_mode              = -1    #// always/auto/never; see common_defs.h
-        self.task_mode_perm         = -1    #// same, but permanent version
-        self.task_mode_delay        =  0.0  #// time until perm becomes actual
-        self.network_suspend_reason = -1
-        self.network_mode           = -1
-        self.network_mode_perm      = -1
-        self.network_mode_delay     =  0.0
-        self.gpu_suspend_reason     = -1
-        self.gpu_mode               = -1
-        self.gpu_mode_perm          = -1
-        self.gpu_mode_delay         =  0.0
+
+        self.task_suspend_reason    = SuspendReason.UNKNOWN  #// bitmap
+        self.task_mode              = RunMode.UNKNOWN
+        self.task_mode_perm         = RunMode.UNKNOWN        #// same, but permanent version
+        self.task_mode_delay        = 0.0                    #// time until perm becomes actual
+
+        self.network_suspend_reason = SuspendReason.UNKNOWN
+        self.network_mode           = RunMode.UNKNOWN
+        self.network_mode_perm      = RunMode.UNKNOWN
+        self.network_mode_delay     = 0.0
+
+        self.gpu_suspend_reason     = SuspendReason.UNKNOWN
+        self.gpu_mode               = RunMode.UNKNOWN
+        self.gpu_mode_perm          = RunMode.UNKNOWN
+        self.gpu_mode_delay         = 0.0
+
         self.disallow_attach        = False
         self.simple_gui_only        = False
 
