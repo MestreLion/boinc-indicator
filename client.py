@@ -231,16 +231,27 @@ class Process(Enum):
         #// waiting for async file copies to finish
 
 
+class _Struct(object):
+    ''' base helper class with common methods for all classes derived from
+        BOINC's C++ structs
+    '''
+    @classmethod
+    def parse(cls, xml):
+        return setattrs_from_xml(cls(), xml)
+
+    def __str__(self):
+        buf = '%s:\n' % self.__class__.__name__
+        for attr in self.__dict__:
+            buf += '\t%s\t%r\n' % (attr, getattr(self, attr))
+        return buf
+
+
 @total_ordering
-class VersionInfo(object):
+class VersionInfo(_Struct):
     def __init__(self, major=0, minor=0, release=0):
         self.major     = major
         self.minor     = minor
         self.release   = release
-
-    @classmethod
-    def parse(cls, xml):
-        return setattrs_from_xml(cls(), xml)
 
     @property
     def _tuple(self):
@@ -264,7 +275,7 @@ class VersionInfo(object):
         return "%s%r" % (self.__class__.__name__, self._tuple)
 
 
-class CcStatus(object):
+class CcStatus(_Struct):
     def __init__(self):
         self.network_status         = NetworkStatus.UNKNOWN
         self.ams_password_error     = False
@@ -288,18 +299,8 @@ class CcStatus(object):
         self.disallow_attach        = False
         self.simple_gui_only        = False
 
-    @classmethod
-    def parse(cls, xml):
-        return setattrs_from_xml(cls(), xml)
 
-    def __str__(self):
-        buf = '%s:\n' % self.__class__.__name__
-        for attr in self.__dict__:
-            buf += '\t%s\t%r\n' % (attr, getattr(self, attr))
-        return buf
-
-
-class Result(object):
+class Result(_Struct):
     ''' Also called "task" in some contexts '''
     def __init__(self):
         # Names and values follow lib/gui_rpc_client.h @ RESULT
@@ -385,7 +386,7 @@ class Result(object):
             xml = ElementTree.fromstring(xml)
 
         # parse main XML
-        result = setattrs_from_xml(cls(), xml)
+        result = super(Result, cls).parse(xml)
 
         # parse '<active_task>' children
         active_task = xml.find('active_task')
