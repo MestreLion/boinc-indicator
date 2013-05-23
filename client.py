@@ -23,6 +23,7 @@
 import rpc
 import socket
 import hashlib
+import time
 from functools import total_ordering
 from xml.etree import ElementTree
 
@@ -68,7 +69,8 @@ def parse_int(e):
     ''' Helper to convert ElementTree.Element.text to integer.
         Treat '<foo/>' (and '<foo></foo>') as 0
     '''
-    return 0 if e.text is None else int(e.text.strip())
+    # int(float()) allows casting to int a value expressed as float in XML
+    return 0 if e.text is None else int(float(e.text.strip()))
 
 
 def parse_float(e):
@@ -169,13 +171,64 @@ class RunMode(Enum):
     ALWAYS                 =    1
     AUTO                   =    2
     NEVER                  =    3
-    RESTORE                =    4  #// restore permanent mode - used only in set_X_mode() GUI RPC
+    RESTORE                =    4
+        #// restore permanent mode - used only in set_X_mode() GUI RPC
 
     @classmethod
     def name(cls, v):
         # all other modes use the fallback name
         if v == cls.AUTO: return "according to prefs"
         else: return super(RunMode, cls).name(v)
+
+
+class CpuSched(Enum):
+    ''' values of ACTIVE_TASK::scheduler_state and ACTIVE_TASK::next_scheduler_state
+        "SCHEDULED" is synonymous with "executing" except when CPU throttling
+        is in use.
+    '''
+    UNINITIALIZED          =    0
+    PREEMPTED              =    1
+    SCHEDULED              =    2
+
+
+class ResultState(Enum):
+    ''' Values of RESULT::state in client.
+        THESE MUST BE IN NUMERICAL ORDER
+        (because of the > comparison in RESULT::computing_done())
+        see html/inc/common_defs.inc
+    '''
+    NEW                    =    0
+        #// New result
+    FILES_DOWNLOADING      =    1
+        #// Input files for result (WU, app version) are being downloaded
+    FILES_DOWNLOADED       =    2
+        #// Files are downloaded, result can be (or is being) computed
+    COMPUTE_ERROR          =    3
+        #// computation failed; no file upload
+    FILES_UPLOADING        =    4
+        #// Output files for result are being uploaded
+    FILES_UPLOADED         =    5
+        #// Files are uploaded, notify scheduling server at some point
+    ABORTED                =    6
+        #// result was aborted
+    UPLOAD_FAILED          =    7
+        #// some output file permanent failure
+
+
+class Process(Enum):
+    ''' values of ACTIVE_TASK::task_state '''
+    UNINITIALIZED          =    0
+        #// process doesn't exist yet
+    EXECUTING              =    1
+        #// process is running, as far as we know
+    SUSPENDED              =    9
+        #// we've sent it a "suspend" message
+    ABORT_PENDING          =    5
+        #// process exceeded limits; send "abort" message, waiting to exit
+    QUIT_PENDING           =    8
+        #// we've sent it a "quit" message, waiting to exit
+    COPY_PENDING           =   10
+        #// waiting for async file copies to finish
 
 
 @total_ordering
@@ -247,51 +300,79 @@ class CcStatus(object):
 
 
 class Result(object):
+    ''' Also called "task" in some contexts '''
     def __init__(self):
+        # Names and values follow lib/gui_rpc_client.h @ RESULT
+        # Order too, except when grouping contradicts client/result.cpp
+        # RESULT::write_gui(), then XML order is used.
+
         self.name                         = ""
         self.wu_name                      = ""
         self.version_num                  = 0
+            #// identifies the app used
         self.plan_class                   = ""
-        self.project_url                  = ""
-        self.report_deadline              = 0.0    # seconds since epoch
-        self.received_time                = 0.0    # seconds since epoch
+        self.project_url                  = ""  # from PROJECT.master_url
+        self.report_deadline              = 0.0 # seconds since epoch
+        self.received_time                = 0.0 # seconds since epoch
+            #// when we got this from server
         self.ready_to_report              = False
+            #// we're ready to report this result to the server;
+            #// either computation is done and all the files have been uploaded
+            #// or there was an error
         self.got_server_ack               = False
+            #// we've received the ack for this result from the server
         self.final_cpu_time               = 0.0
         self.final_elapsed_time           = 0.0
-        self.state                        = 0
-        self.scheduler_state              = 0
+        self.state                        = ResultState.NEW
+        self.estimated_cpu_time_remaining = 0.0
+            #// actually, estimated elapsed time remaining
         self.exit_status                  = 0
-        self.signal                       = 0
+            #// return value from the application
         self.suspended_via_gui            = False
         self.project_suspended_via_gui    = False
+        self.edf_scheduled                = False
+            #// temporary used to tell GUI that this result is deadline-scheduled
         self.coproc_missing               = False
+            #// a coproc needed by this job is missing
+            #// (e.g. because user removed their GPU board).
         self.scheduler_wait               = False
         self.scheduler_wait_reason        = ""
         self.network_wait                 = False
+        self.resources                    = ""
+            #// textual description of resources used
 
         #// the following defined if active
+        # XML is generated in client/app.cpp ACTIVE_TASK::write_gui()
         self.active_task                  = False
-        self.active_task_state            = 0
+        self.active_task_state            = Process.UNINITIALIZED
         self.app_version_num              = 0
         self.slot                         = -1
         self.pid                          = 0
+        self.scheduler_state              = CpuSched.UNINITIALIZED
         self.checkpoint_cpu_time          = 0.0
         self.current_cpu_time             = 0.0
         self.fraction_done                = 0.0
         self.elapsed_time                 = 0.0
-        self.swap_size                    = 0.0
+        self.swap_size                    = 0
         self.working_set_size_smoothed    = 0.0
-        self.estimated_cpu_time_remaining = 0.0    #// actually, estimated elapsed time remaining
         self.too_large                    = False
         self.needs_shmem                  = False
-        self.edf_scheduled                = False
-
         self.graphics_exec_path           = ""
         self.web_graphics_url             = ""
         self.remote_desktop_addr          = ""
-        self.slot_path                    = ""    #// only present if graphics_exec_path is
-        self.resources                    = ""
+        self.slot_path                    = ""
+            #// only present if graphics_exec_path is
+
+        # The following are not in original API, but are present in RPC XML reply
+        self.completed_time               = 0.0
+            #// time when ready_to_report was set
+        self.report_immediately           = False
+        self.working_set_size             = 0
+        self.page_fault_rate              = 0.0
+            #// derived by higher-level code
+
+        # The following are in API, but are NEVER in PC XML reply. Go figure
+        self.signal                       = 0
 
         self.app                          = None  # APP*
         self.wup                          = None  # WORKUNIT*
@@ -314,12 +395,25 @@ class Result(object):
             result.active_task = True   # already the default after main parse
             result = setattrs_from_xml(result, active_task)
 
+        #// if CPU time is nonzero but elapsed time is zero,
+        #// we must be talking to an old client.
+        #// Set elapsed = CPU
+        #// (easier to deal with this here than in the manager)
+        if result.current_cpu_time != 0 and result.elapsed_time == 0:
+            result.elapsed_time = result.current_cpu_time
+
+        if result.final_cpu_time != 0 and result.final_elapsed_time == 0:
+            result.final_elapsed_time = result.final_cpu_time
+
         return result
 
     def __str__(self):
         buf = '%s:\n' % self.__class__.__name__
         for attr in self.__dict__:
-            buf += '\t%s\t%r\n' % (attr, getattr(self, attr))
+            value = getattr(self, attr)
+            if attr in ['received_time', 'report_deadline']:
+                value = time.ctime(value)
+            buf += '\t%s\t%r\n' % (attr, value)
         return buf
 
 
@@ -413,7 +507,6 @@ class BoincClient(object):
 
         return results
 
-
     def set_mode(self, component, mode, duration=0):
         ''' Do the real work of set_{run,gpu,network}_mode()
             This method is not part of the original API.
@@ -479,7 +572,6 @@ def read_gui_rpc_password():
 
 
 if __name__ == '__main__':
-    import time
     with BoincClient() as boinc:
         print boinc.connected
         print boinc.authorized
