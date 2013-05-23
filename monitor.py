@@ -24,8 +24,10 @@ import sys
 import os.path as osp
 import webbrowser
 import subprocess
+import time
+import xdg.BaseDirectory as xdg
 
-from gi.repository import Gtk, GLib, GdkPixbuf, AppIndicator3
+from gi.repository import Gtk, GLib, GdkPixbuf, AppIndicator3, Gio, Wnck
 
 import client
 
@@ -112,6 +114,10 @@ class BoincIndicator(object):
         gtkmenu.show_all()
         self.ind.set_menu(gtkmenu)
 
+        # Disables "Open BOINC Manager..." menu if manager is not found
+        if subprocess.call(['which', 'boincmgr'],  stdout=subprocess.PIPE) != 0:
+            self.menu['manager'].set_sensitive(False)
+
 
     def main(self):
         #FIXME: make damn sure Indicator have found icons and it's working
@@ -131,6 +137,34 @@ class BoincIndicator(object):
 
     def handler_generic(self, src):
         pass
+
+
+    def handler_manager(self, src):
+        # Activate window of running instance, if any
+        try:
+            screen = Wnck.Screen.get_default()
+            screen.force_update()
+            for window in screen.get_windows():
+                if window.get_class_instance_name() == 'boincmgr':
+                    window.activate(time.time())
+                    return
+        finally:
+            window = None
+            screen = None
+            Wnck.shutdown()
+
+        # Launch via desktop
+        for desktop in xdg.load_data_paths(osp.join('applications',
+                                                    'boinc-manager.desktop')):
+            Gio.DesktopAppInfo.new_from_filename(desktop).launch([], None)
+            return
+
+        # Launch via executable
+        try:
+            subprocess.Popen(['boincmgr'], cwd='/var/lib/boinc-client')
+            return
+        except OSError:
+            pass
 
 
     def handler_website(self, src):
@@ -309,6 +343,7 @@ class BoincIndicator(object):
 if __name__ == "__main__":
     GLib.set_application_name(__appname__)
     GLib.set_prgname(__apptag__)
+    Wnck.set_client_type(Wnck.ClientType.PAGER)
     #TODO: add command-line arguments (via argparse), specially --refresh
     # Which could move from __init__() to main()
     ind = BoincIndicator()
