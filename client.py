@@ -49,7 +49,9 @@ def setattrs_from_xml(obj, xml, attrfuncdict={}):
                 if   isinstance(attr, bool):  attrfunc = parse_bool
                 elif isinstance(attr, int):   attrfunc = parse_int
                 elif isinstance(attr, float): attrfunc = parse_float
-                else:                         attrfunc = parse_str
+                elif isinstance(attr, str):   attrfunc = parse_str
+                elif isinstance(attr, list):  attrfunc = parse_list
+                else:                         attrfunc = lambda x: x
             setattr(obj, e.tag, attrfunc(e))
     return obj
 
@@ -81,6 +83,13 @@ def parse_float(e):
 def parse_str(e):
     ''' Helper to convert ElementTree.Element.text to string. '''
     return "" if e.text is None else e.text.strip()
+
+
+def parse_list(e):
+    ''' Helper to convert ElementTree.Element to list. For now, simply return
+        the list of root element's children
+    '''
+    return list(e)
 
 
 class Enum(object):
@@ -300,6 +309,54 @@ class CcStatus(_Struct):
         self.simple_gui_only        = False
 
 
+class HostInfo(_Struct):
+    def __init__(self):
+        self.timezone     = 0    #// local STANDARD time - UTC time (in seconds)
+        self.domain_name  = ""
+        self.serialnum    = ""
+        self.ip_addr      = ""
+        self.host_cpid    = ""
+
+        self.p_ncpus      = 0
+        self.p_vendor     = ""
+        self.p_model      = ""
+        self.p_features   = ""
+        self.p_fpops      = 0.0
+        self.p_iops       = 0.0
+        self.p_membw      = 0.0
+        self.p_calculated = 0.0  #// when benchmarks were last run, or zero
+        self.p_vm_extensions_disabled = False
+
+        self.m_nbytes     = 0    #// Total amount of memory in bytes
+        self.m_cache      = 0
+        self.m_swap       = 0    #// Total amount of swap space in bytes
+
+        self.d_total      = 0    #// Total amount of disk in bytes
+        self.d_free       = 0    #// Total amount of free disk in bytes
+
+        self.os_name      = ""
+        self.os_version   = ""
+
+        #// the following is non-empty if VBox is installed
+        self.virtualbox_version = ""
+
+        self.coprocs = [] # COPROCS
+
+    @classmethod
+    def parse(cls, xml):
+        if not isinstance(xml, ElementTree.Element):
+            xml = ElementTree.fromstring(xml)
+
+        # parse main XML
+        hostinfo = super(HostInfo, cls).parse(xml)
+
+        # parse each coproc in coprocs list
+        for coproc in hostinfo.coprocs:
+            pass
+
+        return hostinfo
+
+
 class Result(_Struct):
     ''' Also called "task" in some contexts '''
     def __init__(self):
@@ -486,6 +543,10 @@ class BoincClient(object):
         except socket.error:
             self.connected = False
 
+    def get_host_info(self):
+        ''' Get information about host hardware and usage. '''
+        return HostInfo.parse(self.rpc.call('<get_host_info/>'))
+
     def get_tasks(self):
         ''' Same as get_results(active_only=False) '''
         return self.get_results(False)
@@ -578,6 +639,7 @@ if __name__ == '__main__':
         print boinc.authorized
         print boinc.version
         print boinc.get_cc_status()
+        print boinc.get_host_info()
         for i, task in enumerate(boinc.get_tasks()):
             print i+1, task
         print boinc.run_benchmarks()
