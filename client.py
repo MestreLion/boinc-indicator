@@ -24,6 +24,7 @@ import rpc
 import socket
 import hashlib
 import time
+import json, pprint
 from functools import total_ordering
 from xml.etree import ElementTree
 
@@ -53,6 +54,8 @@ def setattrs_from_xml(obj, xml, attrfuncdict={}):
                 elif isinstance(attr, list):  attrfunc = parse_list
                 else:                         attrfunc = lambda x: x
             setattr(obj, e.tag, attrfunc(e))
+        else:
+            print "class missing attribute '%s': %r" % (e.tag, obj)
     return obj
 
 
@@ -248,10 +251,20 @@ class _Struct(object):
     def parse(cls, xml):
         return setattrs_from_xml(cls(), xml)
 
-    def __str__(self):
-        buf = '%s:\n' % self.__class__.__name__
+    def __str__(self, indent=0):
+        buf = '%s%s:\n' % ('\t' * indent, self.__class__.__name__)
         for attr in self.__dict__:
-            buf += '\t%s\t%r\n' % (attr, getattr(self, attr))
+            value = getattr(self, attr)
+            if isinstance(value, list):
+                buf += '%s\t%s [\n' % ('\t' * indent, attr)
+                for v in value: buf += '\t\t%s\t\t,\n' % v
+                buf += '\t]\n'
+            else:
+                buf += '%s\t%s\t%s\n' % ('\t' * indent,
+                                         attr,
+                                         value.__str__(indent+2)
+                                            if isinstance(value, _Struct)
+                                            else repr(value))
         return buf
 
 
