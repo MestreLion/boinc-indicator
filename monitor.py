@@ -135,11 +135,11 @@ class BoincIndicator(object):
         self.boinc.disconnect()
 
 
-    def handler_generic(self, src):
+    def handler_generic(self, src=None):
         pass
 
 
-    def handler_manager(self, src):
+    def handler_manager(self, src=None):
         # Activate window of running instance, if any
         try:
             screen = Wnck.Screen.get_default()
@@ -167,7 +167,7 @@ class BoincIndicator(object):
             pass
 
 
-    def handler_website(self, src):
+    def handler_website(self, src=None):
         webbrowser.open('http://boinc.berkeley.edu')
 
 
@@ -179,26 +179,26 @@ class BoincIndicator(object):
         self.update_status()
 
 
-    def handler_suspend_resume_cpu(self, src):
+    def handler_suspend_resume_cpu(self, src=None):
         self.suspend_resume(src, 'cpu')
 
 
-    def handler_suspend_resume_gpu(self, src):
+    def handler_suspend_resume_gpu(self, src=None):
         self.suspend_resume(src, 'gpu')
 
 
-    def handler_client_restart(self, src):
+    def handler_client_restart(self, src=None):
         subprocess.call(['pkexec', '/etc/init.d/boinc-client', 'restart'])
 
 
-    def handler_client_stop(self, src):
+    def handler_client_stop(self, src=None):
         # TODO: open a BIG alert telling user that after a shutdown, admin
         # privileges will be required to restart. Ask to confirm
         if self.boinc.quit():
             self.update_status()
 
 
-    def handler_about(self, src):
+    def handler_about(self, src=None):
         #TODO: prevent opening multiple times, disable minimize
         about = Gtk.AboutDialog()
         about.set_name(__appname__)
@@ -216,7 +216,7 @@ class BoincIndicator(object):
         about.destroy()
 
 
-    def handler_quit(self, src):
+    def handler_quit(self, src=None):
         self.quit()
 
 
