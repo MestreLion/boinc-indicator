@@ -326,34 +326,38 @@ class HostInfo(_Struct):
     def __init__(self):
         self.timezone     = 0    #// local STANDARD time - UTC time (in seconds)
         self.domain_name  = ""
-        self.serialnum    = ""
         self.ip_addr      = ""
         self.host_cpid    = ""
 
-        self.p_ncpus      = 0
-        self.p_vendor     = ""
-        self.p_model      = ""
+        self.p_ncpus      = 0    #// Number of CPUs on host
+        self.p_vendor     = ""   #// Vendor name of CPU
+        self.p_model      = ""   #// Model of CPU
         self.p_features   = ""
-        self.p_fpops      = 0.0
-        self.p_iops       = 0.0
-        self.p_membw      = 0.0
+        self.p_fpops      = 0.0  #// measured floating point ops/sec of CPU
+        self.p_iops       = 0.0  #// measured integer ops/sec of CPU
+        self.p_membw      = 0.0  #// measured memory bandwidth (bytes/sec) of CPU
+            #// The above are per CPU, not total
         self.p_calculated = 0.0  #// when benchmarks were last run, or zero
         self.p_vm_extensions_disabled = False
 
-        self.m_nbytes     = 0    #// Total amount of memory in bytes
-        self.m_cache      = 0
-        self.m_swap       = 0    #// Total amount of swap space in bytes
+        self.m_nbytes     = 0    #// Size of memory in bytes
+        self.m_cache      = 0    #// Size of CPU cache in bytes (L1 or L2?)
+        self.m_swap       = 0    #// Size of swap space in bytes
 
-        self.d_total      = 0    #// Total amount of disk in bytes
-        self.d_free       = 0    #// Total amount of free disk in bytes
+        self.d_total      = 0    #// Total disk space on volume containing
+                                    #// the BOINC client directory.
+        self.d_free       = 0    #// how much is free on that volume
 
-        self.os_name      = ""
-        self.os_version   = ""
+        self.os_name      = ""   #// Name of operating system
+        self.os_version   = ""   #// Version of operating system
 
         #// the following is non-empty if VBox is installed
         self.virtualbox_version = ""
 
         self.coprocs = [] # COPROCS
+
+        # The following are currently unused (not in RPC XML)
+        self.serialnum    = ""   #// textual description of coprocessors
 
     @classmethod
     def parse(cls, xml):
