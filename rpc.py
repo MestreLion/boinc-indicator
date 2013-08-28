@@ -121,6 +121,6 @@ if __name__ == '__main__':
     with Rpc(text_output=True) as rpc:
         print rpc.call('<exchange_versions/>')
         print rpc.call('<get_cc_status/>')
-        print rpc.call('<get_host_info/>')
         print rpc.call('<get_results/>')
+        print rpc.call('<get_host_info/>')
         print rpc.call('<run_benchmarks/>')

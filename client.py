@@ -24,7 +24,6 @@ import rpc
 import socket
 import hashlib
 import time
-import json, pprint
 from functools import total_ordering
 from xml.etree import ElementTree
 
@@ -481,7 +480,7 @@ class Result(_Struct):
         self.page_fault_rate              = 0.0
             #// derived by higher-level code
 
-        # The following are in API, but are NEVER in PC XML reply. Go figure
+        # The following are in API, but are NEVER in RPC XML reply. Go figure
         self.signal                       = 0
 
         self.app                          = None  # APP*
@@ -691,9 +690,9 @@ if __name__ == '__main__':
         print boinc.authorized
         print boinc.version
         print boinc.get_cc_status()
-        print boinc.get_host_info()
         for i, task in enumerate(boinc.get_tasks()):
             print i+1, task
+        print boinc.get_host_info()
         print boinc.run_benchmarks()
         print boinc.set_run_mode(RunMode.NEVER, 6)
         time.sleep(7)
