@@ -234,8 +234,25 @@ class BoincIndicator(object):
     def update_status(self):
         ''' Updates the UI according to boinc client status '''
 
+        def update_status_net():
+            if (status.network_mode == client.RunMode.NEVER or
+                (status.network_mode == client.RunMode.AUTO and
+                 status.network_suspend_reason !=
+                 client.SuspendReason.NOT_SUSPENDED)):
+                # Set UI for 'net suspended'
+                self.menu['status_net'].set_label(
+                    '%s%s' % (
+                    _("Network activity is suspended"),
+                    " - " + client.SuspendReason.name(status.network_suspend_reason)
+                    if status.network_suspend_reason != client.SuspendReason.NOT_SUSPENDED
+                    else ""))
+            else:
+                # Set UI for 'net active'
+                self.menu['status_net'].set_label(_("Network is enabled"))
+
         status = self.boinc.get_cc_status()
         if not self.boinc.connected:
+            # Set UI for 'not connected'
             self.menu['suspend_resume_cpu'].set_sensitive(False)
             self.menu['suspend_resume_gpu'].set_sensitive(False)
             self.menu['status_version'].set_label('Not connected')
@@ -243,97 +260,83 @@ class BoincIndicator(object):
             self.menu['status_gpu'].hide()
             self.menu['status_net'].hide()
             self.ind.set_icon(self.icon_error)
+            return True
+
+        # Set UI for 'connected'
+        self.menu['suspend_resume_cpu'].set_sensitive(True)
+        self.menu['status_version'].set_label(_('BOINC client version: %s'
+                                                % self.boinc.version))
+        update_status_net()
+
+        # Status evaluation is a complex beast: task_mode instantly reports
+        # what client is *set* to, but not if it's *actually* running wus.
+        # For example, it might be set to AUTO and be suspended due to
+        # BATTERIES or USER_ACTIVE. task_suspend_reason is more accurate,
+        # but it does not reflect changes instantly, it can take >1s. Yes,
+        # meanwhile the XML output from RPC call shows inconsistent status.
+        # Try: boinccmd --set_run_mode never && boinccmd --get_cc_status
+        # That's why original taskbar chooses task_mode for icon (responsive
+        # updates, but only catches NEVER) and task_suspend_reason for its
+        # tooltip status description. It's a sensible compromise.
+        # []Snooze/[x]Snooze/Resume tristate also have a complex mechanism.
+        # Here, icon and status labels are locked together (not ideal), but
+        # icon is both responsive AND catches any suspension. But currently
+        # lacks the tristate menu.
+        if (status.task_mode == client.RunMode.NEVER or
+            (status.task_mode == client.RunMode.AUTO and
+             status.task_suspend_reason not in
+                [client.SuspendReason.NOT_SUSPENDED,
+                 client.SuspendReason.CPU_THROTTLE])):
+
+            # Set UI for 'cpu suspended'
+            self.check_set_active('suspend_resume_cpu', True)
+            self.check_set_active('suspend_resume_gpu', False)
+            self.menu['suspend_resume_gpu'].set_sensitive(False)
+            self.menu['status_cpu'].set_label(
+                '%s%s' % (
+                _("Computing is suspended"),
+                " - " + client.SuspendReason.name(status.task_suspend_reason)
+                if status.task_suspend_reason != client.SuspendReason.NOT_SUSPENDED
+                else ""))
+            self.menu['status_gpu'].hide()
+            self.ind.set_icon(self.icon_pause_cpu)
+
         else:
-            # Set UI for 'connected'
-            self.menu['suspend_resume_cpu'].set_sensitive(True)
-            self.menu['status_version'].set_label(_('BOINC client version: %s'
-                                                    % self.boinc.version))
 
-            # Status evaluation is a complex beast: task_mode instantly reports
-            # what client is *set* to, but not if it's *actually* running wus.
-            # For example, it might be set to AUTO and be suspended due to
-            # BATTERIES or USER_ACTIVE. task_suspend_reason is more accurate,
-            # but it does not reflect changes instantly, it can take >1s. Yes,
-            # meanwhile the XML output from RPC call shows inconsistent status.
-            # Try: boinccmd --set_run_mode never && boinccmd --get_cc_status
-            # That's why original taskbar chooses task_mode for icon (responsive
-            # updates, but only catches NEVER) and task_suspend_reason for its
-            # tooltip status description. It's a sensible compromise.
-            # []Snooze/[x]Snooze/Resume tristate also have a complex mechanism.
-            # Here, icon and status labels are locked together (not ideal), but
-            # icon is both responsive AND catches any suspension. But currently
-            # lacks the tristate menu.
-            if (status.task_mode == client.RunMode.NEVER or
-                (status.task_mode == client.RunMode.AUTO and
-                 status.task_suspend_reason not in
-                    [client.SuspendReason.NOT_SUSPENDED,
-                     client.SuspendReason.CPU_THROTTLE])):
+            # Set UI for 'cpu active'
+            self.check_set_active('suspend_resume_cpu', False)
+            self.menu['suspend_resume_gpu'].set_sensitive(True)
+            self.menu['status_cpu'].set_label(_("Computing is enabled"))
 
-                # Set UI for 'cpu suspended'
-                self.check_set_active('suspend_resume_cpu', True)
-                self.check_set_active('suspend_resume_gpu', False)
-                self.menu['suspend_resume_gpu'].set_sensitive(False)
-                self.menu['status_cpu'].set_label(
+            if (status.gpu_mode == client.RunMode.NEVER or
+                (status.gpu_mode == client.RunMode.AUTO and
+                 status.gpu_suspend_reason !=
+                 client.SuspendReason.NOT_SUSPENDED)):
+                # Set UI for 'gpu suspended'
+                self.check_set_active('suspend_resume_gpu', True)
+                self.menu['status_gpu'].set_label(
                     '%s%s' % (
-                    _("Computing is suspended"),
-                    " - " + client.SuspendReason.name(status.task_suspend_reason)
-                    if status.task_suspend_reason != client.SuspendReason.NOT_SUSPENDED
+                    _("GPU computing is suspended"),
+                    " - " + client.SuspendReason.name(status.gpu_suspend_reason)
+                    if status.gpu_suspend_reason != client.SuspendReason.NOT_SUSPENDED
                     else ""))
-                self.menu['status_gpu'].hide()
-                self.menu['status_net'].hide()
-                self.ind.set_icon(self.icon_pause_cpu)
+                self.ind.set_icon(self.icon_pause_gpu)
 
             else:
 
-                # Set UI for 'cpu active'
-                self.check_set_active('suspend_resume_cpu', False)
-                self.menu['suspend_resume_gpu'].set_sensitive(True)
-                self.menu['status_cpu'].set_label(_("Computing is enabled"))
+                # TODO: Must test if there *IS* a GPU (CcState.have_gpu())
+                # Set UI for 'gpu active'
+                self.check_set_active('suspend_resume_gpu', False)
+                self.menu['status_gpu'].set_label(_("GPU computing is enabled"))
+                self.ind.set_icon(self.icon_normal)
 
-                if (status.gpu_mode == client.RunMode.NEVER or
-                    (status.gpu_mode == client.RunMode.AUTO and
-                     status.gpu_suspend_reason !=
-                     client.SuspendReason.NOT_SUSPENDED)):
-                    # Set UI for 'gpu suspended'
-                    self.check_set_active('suspend_resume_gpu', True)
-                    self.menu['status_gpu'].set_label(
-                        '%s%s' % (
-                        _("GPU computing is suspended"),
-                        " - " + client.SuspendReason.name(status.gpu_suspend_reason)
-                        if status.gpu_suspend_reason != client.SuspendReason.NOT_SUSPENDED
-                        else ""))
-                    self.ind.set_icon(self.icon_pause_gpu)
+            # (re-)show menus for 'cpu active'
+            self.menu['status_gpu'].show()
 
-                else:
-
-                    # TODO: Must test if there *IS* a GPU (CcState.have_gpu())
-                    # Set UI for 'gpu active'
-                    self.check_set_active('suspend_resume_gpu', False)
-                    self.menu['status_gpu'].set_label(_("GPU computing is enabled"))
-                    self.ind.set_icon(self.icon_normal)
-
-                if (status.network_mode == client.RunMode.NEVER or
-                    (status.network_mode == client.RunMode.AUTO and
-                     status.network_suspend_reason !=
-                     client.SuspendReason.NOT_SUSPENDED)):
-                    # Set UI for 'net suspended'
-                    self.menu['status_net'].set_label(
-                        '%s%s' % (
-                        _("Network activity is suspended"),
-                        " - " + client.SuspendReason.name(status.network_suspend_reason)
-                        if status.network_suspend_reason != client.SuspendReason.NOT_SUSPENDED
-                        else ""))
-                else:
-                    # Set UI for 'net active'
-                    self.menu['status_net'].set_label(_("Network is enabled"))
-
-                # (re-)show menus for 'cpu active'
-                self.menu['status_gpu'].show()
-                self.menu['status_net'].show()
-
-            # (re-)show menus for 'connected' as last action,
-            # to avoid any visual glitches
-            self.menu['status_cpu'].show()
+        # (re-)show menus for 'connected' as last action,
+        # to avoid any visual glitches
+        self.menu['status_net'].show()
+        self.menu['status_cpu'].show()
 
         return True  # returning False would deactivate update timer
 
