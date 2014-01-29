@@ -124,6 +124,7 @@ class BoincIndicator(object):
         #       before entering Gtk.main()! An invisible indicator has no means
         #       to exit app, and KeyboardInterrupt does not work with Gtk.main()
         #       See: https://bugzilla.gnome.org/show_bug.cgi?id=622084
+        self.handler_client_restart()
         self.boinc.connect()
         self.update_status()
         GLib.timeout_add_seconds(self.refresh, self.update_status)
